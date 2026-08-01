@@ -7,12 +7,12 @@ export default function Pegawai() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
-  const [form, setForm] = useState({ nip: '', name: '', jabatan: '', departemen: '', temporaryPassword: '' });
+  const [form, setForm] = useState({ nip: '', name: '', jabatan: '', temporaryPassword: '' });
 
   const loadPegawai = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/users', { params: { role: 'karyawan', limit: 100 } });
+      const res = await api.get('/users', { params: { limit: 100 } });
       setPegawai(res.data.data);
     } catch (err) {
       alert(getErrorMessage(err, 'Gagal memuat data pegawai.'));
@@ -25,13 +25,13 @@ export default function Pegawai() {
 
   const openAdd = () => {
     setEditData(null);
-    setForm({ nip: '', name: '', jabatan: '', departemen: '', temporaryPassword: '' });
+    setForm({ nip: '', name: '', jabatan: '', temporaryPassword: '' });
     setShowModal(true);
   };
 
   const openEdit = (p) => {
     setEditData(p);
-    setForm({ nip: p.nip, name: p.name, jabatan: p.jabatan || '', departemen: p.departemen || '', temporaryPassword: '' });
+    setForm({ nip: p.nip, name: p.name, jabatan: p.jabatan || '', temporaryPassword: '' });
     setShowModal(true);
   };
 
@@ -42,7 +42,6 @@ export default function Pegawai() {
         await api.put(`/users/${editData.id}`, {
           name: form.name,
           jabatan: form.jabatan,
-          departemen: form.departemen,
         });
       } else {
         if (!form.nip || !form.temporaryPassword) {
@@ -157,12 +156,6 @@ export default function Pegawai() {
                 placeholder="Jabatan"
                 value={form.jabatan}
                 onChange={e => setForm({ ...form, jabatan: e.target.value })}
-              />
-              <input
-                className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
-                placeholder="Departemen"
-                value={form.departemen}
-                onChange={e => setForm({ ...form, departemen: e.target.value })}
               />
               {!editData && (
                 <>

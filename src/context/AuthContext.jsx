@@ -9,9 +9,9 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  const login = async (nip, password) => {
+  const login = async (username, password) => {
     try {
-      const res = await api.post("/auth/login", { nip, password });
+      const res = await api.post("/auth/admin-login", { username, password });
       const { user: loggedInUser, accessToken, refreshToken } = res.data.data;
 
       localStorage.setItem("accessToken", accessToken);
@@ -21,7 +21,7 @@ export function AuthProvider({ children }) {
 
       return { success: true, mustChangePassword: res.data.data.mustChangePassword };
     } catch (err) {
-      return { success: false, message: getErrorMessage(err, "NIP atau password salah.") };
+      return { success: false, message: getErrorMessage(err, "Username atau password salah.") };
     }
   };
 

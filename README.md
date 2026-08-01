@@ -1,6 +1,8 @@
-# 🏢 BUMDESMA — Sistem Absensi
+# 🏢 BUMDESMA — Sistem Absensi (Website Admin & Pimpinan)
 
-Aplikasi web admin untuk manajemen absensi pegawai BUMDESMA (Badan Usaha Milik Desa Bersama). Dibangun dengan **React + Vite + Tailwind CSS**.
+Aplikasi web untuk Admin & Pimpinan BUMDESMA (Badan Usaha Milik Desa
+Bersama) mengelola absensi karyawan. Dibangun dengan **React + Vite +
+Tailwind CSS**, terhubung ke REST API `bumdesma-backend`.
 
 ---
 
@@ -10,78 +12,41 @@ Aplikasi web admin untuk manajemen absensi pegawai BUMDESMA (Badan Usaha Milik D
 - **Tailwind CSS**
 - **Font Awesome** (ikon)
 - **Google Fonts** — Nunito
+- **axios** — HTTP client ke backend
 
 ---
 
 ## ✨ Fitur
 
-| Halaman       | Deskripsi                                            |
-| ------------- | ---------------------------------------------------- |
-| 🔐 Login      | Autentikasi admin                                    |
-| 📊 Dashboard  | Statistik kehadiran & grafik mingguan                |
-| 👥 Pegawai    | Manajemen data pegawai (CRUD)                        |
-| 📋 Absensi    | Rekap & edit data absensi harian                     |
-| 🧹 Piket      | Penjadwalan & assign piket pegawai                   |
-| 📅 Izin/Cuti  | Pengajuan & approval izin/cuti                       |
-| 📈 Laporan    | Ringkasan kehadiran, izin, dan alpa                  |
-| ⚙️ Pengaturan | Jam kerja, lokasi kantor, hari libur, ganti password |
+| Halaman       | Deskripsi                                                        |
+| ------------- | ----------------------------------------------------------------- |
+| 🔐 Login      | Autentikasi Admin/Pimpinan (**username** + password)              |
+| 📊 Dashboard  | Statistik kehadiran & grafik mingguan                             |
+| 👥 Pegawai    | Manajemen data karyawan (CRUD, tabel `users`)                     |
+| 📋 Absensi    | Rekap & koreksi manual data absensi harian                        |
+| 🧹 Piket      | Penjadwalan piket + tombol **Kirim Notifikasi** ke app mobile karyawan |
+| 📅 Izin/Cuti  | Peninjauan (Admin) & keputusan akhir (Pimpinan) atas pengajuan    |
+| 📈 Laporan    | Ringkasan kehadiran, izin, dan alpa; export PDF/Spreadsheet        |
+| ⚙️ Pengaturan | Jam kerja, lokasi kantor, hari libur, ganti password              |
 
----
-
-## 📸 Screenshots
-
-### 🔐 Login
-
-![Login](screenshots/login.png)
-
-### 📊 Dashboard
-
-![Dashboard](screenshots/dashboard.png)
-
-### 👥 Pegawai
-
-![Pegawai](screenshots/pegawai.png)
-
-### 📋 Absensi
-
-![Absensi](screenshots/absensi.png)
-
-### 🧹 Piket
-
-![Piket](screenshots/piket.png)
-
-### 📅 Izin/Cuti
-
-![Izin/Cuti](screenshots/cuti.png)
-
-### 📈 Laporan
-
-![Laporan](screenshots/laporan.png)
-
-### ⚙️ Pengaturan
-
-![Pengaturan](screenshots/pengaturan.png)
+> Karyawan **tidak** login lewat website ini — mereka pakai app mobile
+> (NIP + password). Website ini khusus untuk Admin & Pimpinan.
 
 ---
 
 ## 🛠️ Cara Menjalankan
 
 ### Prasyarat
-
 - Node.js >= 18
 - npm atau yarn
+- `bumdesma-backend` sudah berjalan (default `http://localhost:5000`)
 
 ### Instalasi
 
 ```bash
-# Clone repository
-git clone https://github.com/nandhitooo/mockup-web-pa.git
-cd mockup-web-pa
-
-# Install dependencies
 npm install
-
-# Jalankan development server
+cp .env.example .env
+# sesuaikan VITE_API_BASE_URL jika backend tidak berjalan di localhost:5000
 npm run dev
 ```
 
@@ -102,17 +67,19 @@ src/
 ├── components/
 │   ├── Sidebar.jsx        # Navigasi sidebar
 │   └── Topbar.jsx         # Header halaman
+├── context/
+│   └── AuthContext.jsx    # State login, persist token di localStorage
+├── lib/
+│   └── api.js             # axios client + interceptor JWT
 ├── pages/
-│   ├── Login.jsx
+│   ├── Login.jsx          # Login username + password (admin-login)
 │   ├── Dashboard.jsx
-│   ├── Pegawai.jsx
+│   ├── Pegawai.jsx        # CRUD karyawan (tabel users, tanpa role/departemen)
 │   ├── Absensi.jsx
-│   ├── Piket.jsx
+│   ├── Piket.jsx          # Assign piket + tombol Kirim Notifikasi
 │   ├── Cuti.jsx
 │   ├── Laporan.jsx
 │   └── Pengaturan.jsx
-├── data/
-│   └── mockData.js        # Data dummy
 ├── App.jsx
 ├── main.jsx
 └── index.css
@@ -120,9 +87,76 @@ src/
 
 ---
 
+## 🔐 Login
+
+Login memakai **username + password** ke `POST /api/auth/admin-login`
+(bukan NIP — NIP dipakai khusus login karyawan di app mobile). Akun
+tersimpan di tabel `admin_accounts` pada backend, dibedakan lewat kolom
+`role` (`admin` / `pimpinan`); sidebar & hak akses menyesuaikan role akun
+yang login.
+
+### Akun default (dari seeder backend)
+
+| Role | Username | Password |
+|---|---|---|
+| Admin | `admin` | `Admin@12345` |
+| Pimpinan | `pimpinan` | `Pimpinan@12345` |
+
+---
+
+## 🧹 Fitur Notifikasi Piket
+
+Alur di halaman **Piket**:
+1. Admin assign piket ke karyawan seperti biasa (tombol **Assign Piket**).
+2. Baris jadwal piket baru muncul dengan status **belum terkirim** (tombol
+   biru **"Kirim Notifikasi"**).
+3. Admin klik tombol itu → backend membuat notifikasi in-app untuk karyawan
+   bersangkutan → status berubah jadi badge hijau **"Terkirim"**.
+4. Karyawan melihat badge merah di lonceng Dashboard app mobile begitu
+   notifikasi terkirim.
+
+---
+
+## 📸 Screenshots
+
+### 🔐 Login
+![Login](screenshots/login.png)
+
+### 📊 Dashboard
+![Dashboard](screenshots/dashboard.png)
+
+### 👥 Pegawai
+![Pegawai](screenshots/pegawai.png)
+
+### 📋 Absensi
+![Absensi](screenshots/absensi.png)
+
+### 🧹 Piket
+![Piket](screenshots/piket.png)
+
+### 📅 Izin/Cuti
+![Izin/Cuti](screenshots/cuti.png)
+
+### 📈 Laporan
+![Laporan](screenshots/laporan.png)
+
+### ⚙️ Pengaturan
+![Pengaturan](screenshots/pengaturan.png)
+
+---
+
 ## 🖼️ Logo
 
 Letakkan file logo di `public/logo.png` agar tampil di sidebar dan halaman login.
+
+---
+
+## Catatan CORS
+
+Backend sudah mengaktifkan `cors()` secara default (mengizinkan semua origin)
+sehingga tidak perlu konfigurasi tambahan untuk development. Untuk
+production, batasi origin di `src/app.js` backend sesuai domain frontend
+yang di-deploy.
 
 ---
 
@@ -139,47 +173,3 @@ Letakkan file logo di `public/logo.png` agar tampil di sidebar dan halaman login
 ## 📝 Lisensi
 
 Proyek ini dibuat untuk keperluan akademik (Proyek Akhir).
-
----
-
-## 🔌 Integrasi dengan Backend (bumdesma-backend)
-
-Frontend ini sudah disambungkan ke REST API `bumdesma-backend` (Node.js + Express + PostgreSQL).
-
-### Setup
-
-```bash
-npm install
-cp .env.example .env
-# sesuaikan VITE_API_BASE_URL jika backend tidak berjalan di localhost:5000
-npm run dev
-```
-
-Pastikan **bumdesma-backend** sudah berjalan (`npm run dev` di folder backend, default port `5000`)
-sebelum menjalankan frontend ini.
-
-### Yang berubah dari versi mockup
-
-- `src/lib/api.js` — axios client + interceptor JWT (menyisipkan token, auto-logout saat 401)
-- `src/context/AuthContext.jsx` — state login, persist token/pengguna di localStorage
-- `src/pages/Login.jsx` — login memakai **NIP** (bukan username) ke `POST /api/auth/login`
-- Seluruh halaman (`Dashboard`, `Pegawai`, `Absensi`, `Piket`, `Cuti`, `Laporan`, `Pengaturan`) sudah
-  memanggil endpoint backend asli menggantikan `src/data/mockData.js` (file mock lama tidak lagi dipakai)
-- `Sidebar` menampilkan menu sesuai role (`admin`/`pimpinan`) dan logout memanggil backend session lokal
-- Halaman **Cuti**: tombol aksi menyesuaikan role — Admin meneruskan pengajuan (`review`), Pimpinan
-  memberi keputusan akhir (`decision`). Pengajuan izin/cuti sendiri dilakukan dari aplikasi mobile
-  karyawan (sesuai rancangan sistem), bukan dari web admin.
-- Laporan → tombol Export PDF/Spreadsheet mengunduh file asli dari backend (`/api/reports/attendance/export`)
-
-### Akun default (dari seeder backend)
-
-| Role | NIP | Password |
-|---|---|---|
-| Admin | `ADM001` | `Admin@12345` |
-| Pimpinan | `PIM001` | `Pimpinan@12345` |
-
-### Catatan CORS
-
-Backend sudah mengaktifkan `cors()` secara default (mengizinkan semua origin) sehingga tidak perlu
-konfigurasi tambahan untuk development. Untuk production, batasi origin di `src/app.js` backend sesuai
-domain frontend yang di-deploy.

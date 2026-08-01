@@ -59,6 +59,21 @@ export default function Piket() {
     }
   };
 
+  const [notifyingId, setNotifyingId] = useState(null);
+
+  const handleNotify = async (p) => {
+    if (!window.confirm(`Kirim notifikasi piket ke ${p.user?.name}?`)) return;
+    setNotifyingId(p.id);
+    try {
+      await api.post(`/piket/${p.id}/notify`);
+      await loadData();
+    } catch (err) {
+      alert(getErrorMessage(err, 'Gagal mengirim notifikasi.'));
+    } finally {
+      setNotifyingId(null);
+    }
+  };
+
   const dateObj = new Date(`${tanggal}T00:00:00`);
   const hariIni = dateObj.toLocaleDateString('id-ID', { weekday: 'long' });
 
@@ -94,8 +109,8 @@ export default function Piket() {
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Nama</th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Departemen</th>
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Tanggal</th>
+                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Notifikasi</th>
                   <th className="px-5 py-4"></th>
                 </tr>
               </thead>
@@ -103,8 +118,23 @@ export default function Piket() {
                 {piket.map((p, i) => (
                   <tr key={p.id} className={i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
                     <td className="px-5 py-3 font-extrabold text-gray-800">{p.user?.name}</td>
-                    <td className="px-5 py-3 font-semibold text-gray-600 text-sm">{p.user?.departemen || '-'}</td>
                     <td className="px-5 py-3 font-semibold text-gray-600 text-sm">{p.tanggal}</td>
+                    <td className="px-5 py-3">
+                      {p.notification_sent ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-green-700 bg-green-100">
+                          <i className="fa-solid fa-circle-check"></i> Terkirim
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleNotify(p)}
+                          disabled={notifyingId === p.id}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-all inline-flex items-center gap-1.5"
+                        >
+                          <i className="fa-solid fa-bell"></i>
+                          {notifyingId === p.id ? 'Mengirim...' : 'Kirim Notifikasi'}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-5 py-3">
                       <button onClick={() => handleHapus(p.id)} className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all">hapus</button>
                     </td>

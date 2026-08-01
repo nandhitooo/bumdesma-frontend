@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function Login() {
   const { login } = useAuth();
-  const [nip, setNip] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -14,7 +14,7 @@ export default function Login() {
     setError("");
     setLoading(true);
 
-    const result = await login(nip, password);
+    const result = await login(username, password);
 
     setLoading(false);
     if (!result.success) {
@@ -60,9 +60,9 @@ export default function Login() {
           )}
           <input
             type="text"
-            placeholder="NIP"
-            value={nip}
-            onChange={(e) => setNip(e.target.value)}
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-3 rounded-xl bg-gray-200 text-gray-600 placeholder-gray-400 outline-none focus:ring-2 focus:ring-green-400 font-medium"
           />
           <input
