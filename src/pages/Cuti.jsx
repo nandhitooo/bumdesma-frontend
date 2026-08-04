@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import Topbar from '../components/Topbar';
-import api, { getErrorMessage } from '../lib/api';
+import api, { getErrorMessage, FILE_BASE_URL } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_LABEL = {
@@ -85,6 +85,7 @@ export default function Cuti() {
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Jenis</th>
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Tanggal</th>
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Alasan</th>
+                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Lampiran</th>
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">Status</th>
                   <th className="px-5 py-4"></th>
                 </tr>
@@ -96,6 +97,20 @@ export default function Cuti() {
                     <td className="px-5 py-3 font-bold text-gray-700 capitalize">{c.jenis}</td>
                     <td className="px-5 py-3 text-sm font-semibold text-gray-500">{c.tanggal_mulai} s/d {c.tanggal_selesai}</td>
                     <td className="px-5 py-3 text-sm font-semibold text-gray-500">{c.alasan}</td>
+                    <td className="px-5 py-3">
+                      {c.file_lampiran ? (
+                        <a
+                          href={`${FILE_BASE_URL}${c.file_lampiran}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all"
+                        >
+                          <i className="fa-solid fa-paperclip"></i> Lihat File
+                        </a>
+                      ) : (
+                        <span className="text-xs font-semibold text-gray-400">-</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3">
                       <span className={`px-3 py-1 rounded-lg text-xs font-bold ${statusStyle(c.status)}`}>{STATUS_LABEL[c.status] || c.status}</span>
                     </td>

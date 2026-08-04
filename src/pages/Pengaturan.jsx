@@ -125,16 +125,146 @@ function PasswordModal({ onClose }) {
   );
 }
 
+// Menampilkan seluruh parameter sistem yang sedang aktif (kecuali password,
+// yang tidak pernah ditampilkan/di-fetch dari mana pun): radius geofencing,
+// lokasi kantor (embed Google Maps), jam kerja per hari, dan hari libur.
+function InfoSistem({ data }) {
+  if (!data) return null;
+  const { settings = {}, workSchedules = [] } = data;
+
+  const lat = settings.office_latitude;
+  const lng = settings.office_longitude;
+  const radius = settings.geofence_radius_meters;
+
+  let holidays = [];
+  try {
+    const raw = settings.national_holidays;
+    holidays = typeof raw === 'string' ? JSON.parse(raw) : (raw || []);
+  } catch {
+    holidays = [];
+  }
+
+  const hasCoords = lat !== undefined && lat !== null && lat !== '' &&
+    lng !== undefined && lng !== null && lng !== '';
+  const mapsSrc = hasCoords
+    ? `https://www.google.com/maps?q=${lat},${lng}&z=17&output=embed`
+    : null;
+
+  return (
+    <div className="mb-8 flex flex-col gap-4">
+      <h2 className="text-lg font-extrabold text-gray-800">Info Sistem</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3 text-gray-700 font-extrabold">
+            <i className="fa-solid fa-satellite-dish text-green-700"></i> Radius Geofencing
+          </div>
+          <div className="text-3xl font-extrabold text-gray-800">
+            {radius ?? '-'} <span className="text-base font-bold text-gray-400">meter</span>
+          </div>
+          <p className="text-xs text-gray-500 font-semibold mt-2">
+            Karyawan hanya bisa melakukan absensi jika berada dalam radius ini dari titik kantor.
+          </p>
+        </div>
+
+        <div className="bg-white rounded-2xl shadow-sm p-5">
+          <div className="flex items-center gap-2 mb-3 text-gray-700 font-extrabold">
+            <i className="fa-solid fa-location-dot text-green-700"></i> Koordinat Kantor
+          </div>
+          <div className="text-sm font-bold text-gray-800">Latitude: {lat ?? '-'}</div>
+          <div className="text-sm font-bold text-gray-800">Longitude: {lng ?? '-'}</div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-3 text-gray-700 font-extrabold">
+          <i className="fa-solid fa-map-location-dot text-green-700"></i> Lokasi Kantor
+        </div>
+        {mapsSrc ? (
+          <div className="rounded-xl overflow-hidden border border-gray-200">
+            <iframe
+              title="Lokasi Kantor"
+              src={mapsSrc}
+              width="100%"
+              height="280"
+              style={{ border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            ></iframe>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500 font-semibold">Koordinat kantor belum diatur.</p>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-3 text-gray-700 font-extrabold">
+          <i className="fa-solid fa-business-time text-green-700"></i> Jam Kerja
+        </div>
+        {workSchedules.length === 0 ? (
+          <p className="text-sm text-gray-500 font-semibold">Belum ada jadwal kerja.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-gray-500 font-bold">
+                <th className="py-2 pr-3">Jadwal</th>
+                <th className="py-2 pr-3">Masuk</th>
+                <th className="py-2 pr-3">Pulang</th>
+                <th className="py-2 pr-3">Toleransi</th>
+                <th className="py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {workSchedules.map((ws) => (
+                <tr key={ws.id} className="border-b border-gray-50 last:border-0">
+                  <td className="py-2 pr-3 font-extrabold text-gray-800">{ws.label}</td>
+                  <td className="py-2 pr-3 font-semibold text-gray-700">{ws.start_time?.slice(0, 5)}</td>
+                  <td className="py-2 pr-3 font-semibold text-gray-700">{ws.end_time?.slice(0, 5)}</td>
+                  <td className="py-2 pr-3 font-semibold text-gray-700">{ws.late_tolerance_minutes} menit</td>
+                  <td className="py-2">
+                    <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${ws.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                      {ws.is_active ? 'Aktif' : 'Nonaktif'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-3 text-gray-700 font-extrabold">
+          <i className="fa-solid fa-calendar-day text-green-700"></i> Hari Libur Nasional
+        </div>
+        {holidays.length === 0 ? (
+          <p className="text-sm text-gray-500 font-semibold">Belum ada hari libur yang ditetapkan.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {holidays.map((h) => (
+              <span key={h} className="px-3 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-700">{h}</span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Pengaturan() {
   const [activeModal, setActiveModal] = useState(null);
-  const [settings, setSettings] = useState(null);
+  const [settingsData, setSettingsData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const loadSettings = async () => {
+    setLoading(true);
     try {
       const res = await api.get('/settings');
-      setSettings(res.data.data);
+      setSettingsData(res.data.data);
     } catch (err) {
-      // Diam-diam gagal; halaman tetap bisa dipakai untuk mengubah setting
+      alert(getErrorMessage(err, 'Gagal memuat info sistem.'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -153,11 +283,13 @@ export default function Pengaturan() {
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
       <Topbar title="Pengaturan" />
       <div className="p-6">
-        {settings?.settings && (
-          <div className="mb-5 bg-white rounded-2xl shadow-sm p-4 text-sm text-gray-600 font-semibold">
-            Radius geofencing saat ini: <span className="font-extrabold text-gray-800">{settings.settings.geofence_radius_meters || '-'} meter</span>
-          </div>
+        {loading ? (
+          <div className="mb-8 text-center text-sm font-semibold text-gray-500">Memuat info sistem...</div>
+        ) : (
+          <InfoSistem data={settingsData} />
         )}
+
+        <h2 className="text-lg font-extrabold text-gray-800 mb-4">Ubah Pengaturan</h2>
         <div className="flex gap-4 flex-wrap">
           {cards.map(c => (
             <button
