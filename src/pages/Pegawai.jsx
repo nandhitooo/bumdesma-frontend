@@ -120,6 +120,9 @@ export default function Pegawai() {
                     NIP
                   </th>
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                    Email Pemulihan
+                  </th>
+                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
                     Status
                   </th>
                   <th className="px-5 py-4"></th>
@@ -139,6 +142,15 @@ export default function Pegawai() {
                     </td>
                     <td className="px-5 py-3 text-xs font-semibold text-gray-500">
                       {p.nip}
+                    </td>
+                    <td className="px-5 py-3 text-xs font-semibold">
+                      {p.email ? (
+                        <span className="text-gray-700">{p.email}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-600 font-bold">
+                          <i className="fa-solid fa-triangle-exclamation"></i> Belum diisi
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <button
@@ -209,6 +221,9 @@ export default function Pegawai() {
                       setForm({ ...form, temporaryPassword: e.target.value })
                     }
                   />
+                  <p className="text-xs text-gray-400 font-semibold -mt-1">
+                    Karyawan akan diminta mengisi email pemulihan sendiri saat pertama kali login.
+                  </p>
                 </>
               )}
             </div>
