@@ -42,7 +42,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <div
         className={`fixed inset-0 z-20 bg-black/40 transition-opacity duration-200 md:hidden ${
           sidebarOpen
@@ -59,7 +59,7 @@ export default function App() {
         setOpen={setSidebarOpen}
       />
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-y-auto">
         <div className="md:hidden sticky top-0 z-20 bg-white border-b border-gray-200">
           <div className="flex items-center justify-between px-4 py-3">
             <button
