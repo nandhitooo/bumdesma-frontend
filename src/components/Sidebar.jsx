@@ -8,7 +8,12 @@ const navItems = [
     page: "dashboard",
     roles: ["admin", "pimpinan"],
   },
-  { label: "Pegawai", icon: "fa-users", page: "pegawai", roles: ["admin"] },
+  {
+    label: "Pegawai",
+    icon: "fa-users",
+    page: "pegawai",
+    roles: ["admin", "pimpinan"],
+  }, // was admin-only
   {
     label: "Absensi",
     icon: "fa-clipboard-check",
@@ -33,7 +38,7 @@ const navItems = [
     icon: "fa-gear",
     page: "pengaturan",
     roles: ["admin", "pimpinan"],
-  }, // was admin-only
+  },
 ];
 
 export default function Sidebar({ activePage, setPage, open, setOpen }) {

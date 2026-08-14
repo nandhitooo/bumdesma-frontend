@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import api, { getErrorMessage } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function Pegawai() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin"; // Pimpinan hanya boleh melihat daftar pegawai
   const [pegawai, setPegawai] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -15,7 +18,6 @@ export default function Pegawai() {
     temporaryPassword: "",
   });
 
-  // Konfirmasi hapus - butuh mengetik ulang nama pegawai, bukan sekadar OK/Cancel
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -102,13 +104,15 @@ export default function Pegawai() {
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
       <Topbar title="Pegawai" />
       <div className="p-6">
-        <button
-          onClick={openAdd}
-          className="mb-5 px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all"
-          style={{ backgroundColor: "#1a7a1a" }}
-        >
-          <i className="fa-solid fa-plus"></i> Tambah Pegawai
-        </button>
+        {isAdmin && (
+          <button
+            onClick={openAdd}
+            className="mb-5 px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all"
+            style={{ backgroundColor: "#1a7a1a" }}
+          >
+            <i className="fa-solid fa-plus"></i> Tambah Pegawai
+          </button>
+        )}
 
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
           {loading ? (
@@ -134,7 +138,7 @@ export default function Pegawai() {
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
                     Status
                   </th>
-                  <th className="px-5 py-4"></th>
+                  {isAdmin && <th className="px-5 py-4"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -163,29 +167,39 @@ export default function Pegawai() {
                       )}
                     </td>
                     <td className="px-5 py-3">
-                      <button
-                        onClick={() => handleToggleStatus(p)}
-                        className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
-                      >
-                        {p.status === "active" ? "Aktif" : "Non-Aktif"}
-                      </button>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-2">
+                      {isAdmin ? (
                         <button
-                          onClick={() => openEdit(p)}
-                          className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                          onClick={() => handleToggleStatus(p)}
+                          className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
                         >
-                          edit
+                          {p.status === "active" ? "Aktif" : "Non-Aktif"}
                         </button>
-                        <button
-                          onClick={() => setDeleteTarget(p)}
-                          className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                      ) : (
+                        <span
+                          className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
                         >
-                          hapus
-                        </button>
-                      </div>
+                          {p.status === "active" ? "Aktif" : "Non-Aktif"}
+                        </span>
+                      )}
                     </td>
+                    {isAdmin && (
+                      <td className="px-5 py-3">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEdit(p)}
+                            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                          >
+                            edit
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(p)}
+                            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                          >
+                            hapus
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -194,8 +208,8 @@ export default function Pegawai() {
         </div>
       </div>
 
-      {/* Modal Tambah/Edit */}
-      {showModal && (
+      {/* Modal Tambah/Edit - hanya bisa dibuka Admin, jadi cukup dijaga oleh tombol di atas */}
+      {isAdmin && showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-lg font-extrabold text-gray-800 mb-4">
@@ -257,8 +271,8 @@ export default function Pegawai() {
         </div>
       )}
 
-      {/* Modal Konfirmasi Hapus - ketik ulang nama pegawai */}
-      {deleteTarget && (
+      {/* Modal Konfirmasi Hapus - hanya relevan untuk Admin */}
+      {isAdmin && deleteTarget && (
         <ConfirmDeleteModal
           title="Hapus Pegawai"
           message={`Tindakan ini akan menghapus data pegawai "${deleteTarget.name}" secara permanen. Tindakan ini tidak dapat dibatalkan.`}
