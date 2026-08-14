@@ -20,7 +20,12 @@ const navItems = [
     page: "absensi",
     roles: ["admin", "pimpinan"],
   },
-  { label: "Piket", icon: "fa-broom", page: "piket", roles: ["admin"] },
+  {
+    label: "Piket",
+    icon: "fa-broom",
+    page: "piket",
+    roles: ["admin", "pimpinan"],
+  },
   {
     label: "Izin/Cuti",
     icon: "fa-calendar-xmark",
