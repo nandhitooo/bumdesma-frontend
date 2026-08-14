@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
 import api, { getErrorMessage } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 function formatJam(dateStr) {
   if (!dateStr) return "-";
@@ -16,6 +17,8 @@ const STATUS_LABEL = {
 };
 
 export default function Absensi() {
+  const { user } = useAuth();
+  const canEdit = user?.role === "admin"; // Pimpinan hanya boleh melihat, backend juga menolak PUT-nya
   const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
   const [pegawai, setPegawai] = useState([]);
   const [absensi, setAbsensi] = useState([]);
@@ -176,7 +179,7 @@ export default function Absensi() {
                   <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
                     Status
                   </th>
-                  <th className="px-5 py-4"></th>
+                  {canEdit && <th className="px-5 py-4"></th>}
                 </tr>
               </thead>
               <tbody>
@@ -204,14 +207,16 @@ export default function Absensi() {
                         ? STATUS_LABEL[r.status] || r.status
                         : "Belum Absen"}
                     </td>
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => openEdit(r)}
-                        className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
-                      >
-                        edit
-                      </button>
-                    </td>
+                    {canEdit && (
+                      <td className="px-5 py-3">
+                        <button
+                          onClick={() => openEdit(r)}
+                          className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                        >
+                          edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

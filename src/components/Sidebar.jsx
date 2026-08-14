@@ -2,18 +2,45 @@ import PodoRukunLogo from "../assets/podo-rukun.png";
 import { useAuth } from "../context/AuthContext";
 
 const navItems = [
-  { label: "Dashboard", icon: "fa-gauge-high", page: "dashboard", roles: ["admin", "pimpinan"] },
+  {
+    label: "Dashboard",
+    icon: "fa-gauge-high",
+    page: "dashboard",
+    roles: ["admin", "pimpinan"],
+  },
   { label: "Pegawai", icon: "fa-users", page: "pegawai", roles: ["admin"] },
-  { label: "Absensi", icon: "fa-clipboard-check", page: "absensi", roles: ["admin", "pimpinan"] },
+  {
+    label: "Absensi",
+    icon: "fa-clipboard-check",
+    page: "absensi",
+    roles: ["admin", "pimpinan"],
+  },
   { label: "Piket", icon: "fa-broom", page: "piket", roles: ["admin"] },
-  { label: "Izin/Cuti", icon: "fa-calendar-xmark", page: "cuti", roles: ["admin", "pimpinan"] },
-  { label: "Laporan", icon: "fa-chart-bar", page: "laporan", roles: ["admin", "pimpinan"] },
-  { label: "Pengaturan", icon: "fa-gear", page: "pengaturan", roles: ["admin"] },
+  {
+    label: "Izin/Cuti",
+    icon: "fa-calendar-xmark",
+    page: "cuti",
+    roles: ["admin", "pimpinan"],
+  },
+  {
+    label: "Laporan",
+    icon: "fa-chart-bar",
+    page: "laporan",
+    roles: ["admin", "pimpinan"],
+  },
+  {
+    label: "Pengaturan",
+    icon: "fa-gear",
+    page: "pengaturan",
+    roles: ["admin", "pimpinan"],
+  }, // was admin-only
 ];
 
 export default function Sidebar({ activePage, setPage, open, setOpen }) {
   const { user, logout } = useAuth();
-  const visibleItems = navItems.filter((item) => item.roles.includes(user?.role));
+  const visibleItems = navItems.filter((item) =>
+    item.roles.includes(user?.role),
+  );
 
   return (
     <div

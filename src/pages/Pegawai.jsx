@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
+import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import api, { getErrorMessage } from "../lib/api";
 
 export default function Pegawai() {
@@ -13,6 +14,10 @@ export default function Pegawai() {
     jabatan: "",
     temporaryPassword: "",
   });
+
+  // Konfirmasi hapus - butuh mengetik ulang nama pegawai, bukan sekadar OK/Cancel
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadPegawai = async () => {
     setLoading(true);
@@ -69,13 +74,17 @@ export default function Pegawai() {
     }
   };
 
-  const handleHapus = async (id) => {
-    if (!window.confirm("Hapus pegawai ini?")) return;
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await api.delete(`/users/${id}`);
+      await api.delete(`/users/${deleteTarget.id}`);
+      setDeleteTarget(null);
       await loadPegawai();
     } catch (err) {
       alert(getErrorMessage(err, "Gagal menghapus pegawai."));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -148,7 +157,8 @@ export default function Pegawai() {
                         <span className="text-gray-700">{p.email}</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-600 font-bold">
-                          <i className="fa-solid fa-triangle-exclamation"></i> Belum diisi
+                          <i className="fa-solid fa-triangle-exclamation"></i>{" "}
+                          Belum diisi
                         </span>
                       )}
                     </td>
@@ -169,7 +179,7 @@ export default function Pegawai() {
                           edit
                         </button>
                         <button
-                          onClick={() => handleHapus(p.id)}
+                          onClick={() => setDeleteTarget(p)}
                           className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
                         >
                           hapus
@@ -184,7 +194,7 @@ export default function Pegawai() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal Tambah/Edit */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
@@ -222,7 +232,8 @@ export default function Pegawai() {
                     }
                   />
                   <p className="text-xs text-gray-400 font-semibold -mt-1">
-                    Karyawan akan diminta mengisi email pemulihan sendiri saat pertama kali login.
+                    Karyawan akan diminta mengisi email pemulihan sendiri saat
+                    pertama kali login.
                   </p>
                 </>
               )}
@@ -244,6 +255,18 @@ export default function Pegawai() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Konfirmasi Hapus - ketik ulang nama pegawai */}
+      {deleteTarget && (
+        <ConfirmDeleteModal
+          title="Hapus Pegawai"
+          message={`Tindakan ini akan menghapus data pegawai "${deleteTarget.name}" secara permanen. Tindakan ini tidak dapat dibatalkan.`}
+          confirmText={deleteTarget.name}
+          loading={deleting}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
+        />
       )}
     </div>
   );

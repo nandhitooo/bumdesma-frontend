@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
 import api, { getErrorMessage, FILE_BASE_URL } from "../lib/api";
+import { useAuth } from "../context/AuthContext";
 
 function ModalWrapper({
   title,
@@ -356,6 +357,8 @@ function HariLiburModal({ existing, onClose, onSaved }) {
 }
 
 export default function Pengaturan() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin"; // Pimpinan: hanya lihat, tidak bisa ubah konfigurasi
   const [activeModal, setActiveModal] = useState(null);
   const [settingsData, setSettingsData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -463,16 +466,33 @@ export default function Pengaturan() {
     ? `https://www.google.com/maps?q=${lat},${lng}&z=17&output=embed`
     : null;
 
-  const cards = [
-    { id: "lokasi", icon: "fa-location-dot", label: "Lokasi Kantor" },
-    { id: "radius", icon: "fa-satellite-dish", label: "Radius Geofencing" },
+  const allCards = [
+    {
+      id: "lokasi",
+      icon: "fa-location-dot",
+      label: "Lokasi Kantor",
+      adminOnly: true,
+    },
+    {
+      id: "radius",
+      icon: "fa-satellite-dish",
+      label: "Radius Geofencing",
+      adminOnly: true,
+    },
     {
       id: "qr",
       icon: "fa-qrcode",
       label: qr ? "Regenerasi QR Code" : "Generate QR Code",
+      adminOnly: true,
     },
-    { id: "password", icon: "fa-lock", label: "Ganti Password" },
+    {
+      id: "password",
+      icon: "fa-lock",
+      label: "Ganti Password",
+      adminOnly: false,
+    },
   ];
+  const cards = allCards.filter((c) => isAdmin || !c.adminOnly);
 
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
@@ -592,14 +612,16 @@ export default function Pengaturan() {
                           </span>
                         </td>
                         <td className="py-2">
-                          <button
-                            onClick={() =>
-                              setActiveModal(`jadwal-${ws.day_type}`)
-                            }
-                            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
-                          >
-                            edit
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() =>
+                                setActiveModal(`jadwal-${ws.day_type}`)
+                              }
+                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                            >
+                              edit
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -615,13 +637,15 @@ export default function Pengaturan() {
                   <i className="fa-solid fa-qrcode text-green-700"></i> QR Code
                   Absensi
                 </div>
-                <button
-                  onClick={() => setActiveModal("qr")}
-                  className="px-4 py-2 rounded-xl text-white font-bold text-xs hover:opacity-90"
-                  style={{ backgroundColor: "#1a7a1a" }}
-                >
-                  {qr ? "Regenerasi QR Code" : "Generate QR Code"}
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => setActiveModal("qr")}
+                    className="px-4 py-2 rounded-xl text-white font-bold text-xs hover:opacity-90"
+                    style={{ backgroundColor: "#1a7a1a" }}
+                  >
+                    {qr ? "Regenerasi QR Code" : "Generate QR Code"}
+                  </button>
+                )}
               </div>
 
               {qrLoading ? (
@@ -662,13 +686,15 @@ export default function Pengaturan() {
                   <i className="fa-solid fa-calendar-day text-green-700"></i>{" "}
                   Hari Libur Nasional
                 </div>
-                <button
-                  onClick={() => setActiveModal("hari-libur")}
-                  className="px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 hover:opacity-90"
-                  style={{ backgroundColor: "#1a7a1a" }}
-                >
-                  <i className="fa-solid fa-plus"></i> Tambah Hari Libur
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => setActiveModal("hari-libur")}
+                    className="px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 hover:opacity-90"
+                    style={{ backgroundColor: "#1a7a1a" }}
+                  >
+                    <i className="fa-solid fa-plus"></i> Tambah Hari Libur
+                  </button>
+                )}
               </div>
               {holidays.length === 0 ? (
                 <p className="text-sm text-gray-500 font-semibold">
@@ -682,13 +708,15 @@ export default function Pengaturan() {
                       className="flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-700"
                     >
                       {h}
-                      <button
-                        onClick={() => handleDeleteHoliday(h)}
-                        className="text-gray-400 hover:text-red-500"
-                        title="Hapus"
-                      >
-                        <i className="fa-solid fa-xmark"></i>
-                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteHoliday(h)}
+                          className="text-gray-400 hover:text-red-500"
+                          title="Hapus"
+                        >
+                          <i className="fa-solid fa-xmark"></i>
+                        </button>
+                      )}
                     </span>
                   ))}
                 </div>
