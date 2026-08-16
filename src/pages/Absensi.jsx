@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
 
 function formatJam(dateStr) {
   if (!dateStr) return "-";
@@ -18,6 +19,7 @@ const STATUS_LABEL = {
 
 export default function Absensi() {
   const { user } = useAuth();
+  const { alert } = useModal();
   const canEdit = user?.role === "admin"; // Pimpinan hanya boleh melihat, backend juga menolak PUT-nya
   const [tanggal, setTanggal] = useState(new Date().toISOString().slice(0, 10));
   const [pegawai, setPegawai] = useState([]);
@@ -42,7 +44,10 @@ export default function Absensi() {
       setPegawai(pegawaiRes.data.data);
       setAbsensi(absensiRes.data.data);
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal memuat data absensi."));
+      await alert(getErrorMessage(err, "Gagal memuat data absensi."), {
+        title: "Gagal Memuat Data",
+        danger: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -50,6 +55,7 @@ export default function Absensi() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tanggal]);
 
   // Gabungkan seluruh pegawai dengan data absensinya pada tanggal terpilih.
@@ -109,7 +115,10 @@ export default function Absensi() {
       setShowModal(false);
       await loadData();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan koreksi absensi."));
+      await alert(getErrorMessage(err, "Gagal menyimpan koreksi absensi."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }

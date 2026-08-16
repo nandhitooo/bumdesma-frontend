@@ -1,5 +1,6 @@
 import PodoRukunLogo from "../assets/podo-rukun.png";
 import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
 
 const navItems = [
   {
@@ -48,9 +49,23 @@ const navItems = [
 
 export default function Sidebar({ activePage, setPage, open, setOpen }) {
   const { user, logout } = useAuth();
+  const { confirm } = useModal();
   const visibleItems = navItems.filter((item) =>
     item.roles.includes(user?.role),
   );
+
+  const handleLogout = async () => {
+    const confirmed = await confirm("Apakah Anda yakin ingin keluar?", {
+      title: "Log Out",
+      confirmLabel: "Keluar",
+      cancelLabel: "Batal",
+      danger: true,
+    });
+    if (confirmed) {
+      logout();
+      setOpen?.(false);
+    }
+  };
 
   return (
     <div
@@ -93,13 +108,7 @@ export default function Sidebar({ activePage, setPage, open, setOpen }) {
         ))}
 
         <button
-          onClick={() => {
-            const confirmed = window.confirm("Do you want to log out?");
-            if (confirmed) {
-              logout();
-              setOpen?.(false);
-            }
-          }}
+          onClick={handleLogout}
           className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-left text-sm font-bold text-white hover:bg-green-700 transition-all mt-2"
         >
           <i className="fa-solid fa-right-from-bracket w-4"></i>

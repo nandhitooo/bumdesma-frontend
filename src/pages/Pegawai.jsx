@@ -3,9 +3,11 @@ import Topbar from "../components/Topbar";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
 
 export default function Pegawai() {
   const { user } = useAuth();
+  const { alert } = useModal();
   const isAdmin = user?.role === "admin"; // Pimpinan hanya boleh melihat daftar pegawai
   const [pegawai, setPegawai] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,10 @@ export default function Pegawai() {
       const res = await api.get("/users", { params: { limit: 100 } });
       setPegawai(res.data.data);
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal memuat data pegawai."));
+      await alert(getErrorMessage(err, "Gagal memuat data pegawai."), {
+        title: "Gagal Memuat Data",
+        danger: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -35,6 +40,7 @@ export default function Pegawai() {
 
   useEffect(() => {
     loadPegawai();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openAdd = () => {
@@ -64,7 +70,12 @@ export default function Pegawai() {
         });
       } else {
         if (!form.nip || !form.temporaryPassword) {
-          alert("NIP dan password sementara wajib diisi untuk pegawai baru.");
+          await alert(
+            "NIP dan password sementara wajib diisi untuk pegawai baru.",
+            {
+              title: "Data Belum Lengkap",
+            },
+          );
           return;
         }
         await api.post("/users", form);
@@ -72,7 +83,10 @@ export default function Pegawai() {
       setShowModal(false);
       await loadPegawai();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan data pegawai."));
+      await alert(getErrorMessage(err, "Gagal menyimpan data pegawai."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     }
   };
 
@@ -84,7 +98,10 @@ export default function Pegawai() {
       setDeleteTarget(null);
       await loadPegawai();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menghapus pegawai."));
+      await alert(getErrorMessage(err, "Gagal menghapus pegawai."), {
+        title: "Gagal Menghapus",
+        danger: true,
+      });
     } finally {
       setDeleting(false);
     }
@@ -96,7 +113,10 @@ export default function Pegawai() {
       await api.patch(`/users/${p.id}/status`, { status: nextStatus });
       await loadPegawai();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal mengubah status pegawai."));
+      await alert(getErrorMessage(err, "Gagal mengubah status pegawai."), {
+        title: "Gagal Mengubah Status",
+        danger: true,
+      });
     }
   };
 

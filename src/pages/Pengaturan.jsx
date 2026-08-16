@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
 import api, { getErrorMessage, FILE_BASE_URL } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
 
 function ModalWrapper({
   title,
@@ -28,7 +29,8 @@ function ModalWrapper({
           </button>
           <button
             onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl text-gray-600 font-bold text-sm bg-gray-100 hover:bg-gray-200"
+            disabled={saving}
+            className="flex-1 py-2.5 rounded-xl text-gray-600 font-bold text-sm bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
           >
             Batal
           </button>
@@ -42,6 +44,7 @@ function ModalWrapper({
 // terpisah lewat tombol "edit" di masing-masing baris tabel, bukan lewat
 // satu form gabungan seperti sebelumnya.
 function JadwalKerjaModal({ schedule, dayLabel, onClose, onSaved }) {
+  const { alert } = useModal();
   const [masuk, setMasuk] = useState(schedule?.start_time?.slice(0, 5) || "");
   const [pulang, setPulang] = useState(schedule?.end_time?.slice(0, 5) || "");
   const [toleransi, setToleransi] = useState(
@@ -59,7 +62,10 @@ function JadwalKerjaModal({ schedule, dayLabel, onClose, onSaved }) {
       });
       onSaved();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan jadwal kerja."));
+      await alert(getErrorMessage(err, "Gagal menyimpan jadwal kerja."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -115,6 +121,7 @@ function JadwalKerjaModal({ schedule, dayLabel, onClose, onSaved }) {
 // Koordinat kantor. Dipisah dari radius geofencing supaya masing-masing
 // parameter bisa diubah tanpa perlu mengetik ulang parameter yang lain.
 function LokasiModal({ settings, onClose, onSaved }) {
+  const { alert } = useModal();
   const [lat, setLat] = useState(settings?.office_latitude ?? "");
   const [lng, setLng] = useState(settings?.office_longitude ?? "");
   const [saving, setSaving] = useState(false);
@@ -128,7 +135,10 @@ function LokasiModal({ settings, onClose, onSaved }) {
       });
       onSaved();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan lokasi kantor."));
+      await alert(getErrorMessage(err, "Gagal menyimpan lokasi kantor."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -169,6 +179,7 @@ function LokasiModal({ settings, onClose, onSaved }) {
 
 // Radius geofencing, terpisah dari koordinat kantor.
 function RadiusModal({ settings, onClose, onSaved }) {
+  const { alert } = useModal();
   const [radius, setRadius] = useState(settings?.geofence_radius_meters ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -178,7 +189,10 @@ function RadiusModal({ settings, onClose, onSaved }) {
       await api.put("/settings", { geofence_radius_meters: radius });
       onSaved();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan radius geofencing."));
+      await alert(getErrorMessage(err, "Gagal menyimpan radius geofencing."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -212,12 +226,15 @@ function RadiusModal({ settings, onClose, onSaved }) {
 }
 
 function PasswordModal({ onClose }) {
+  const { alert } = useModal();
   const [form, setForm] = useState({ old: "", new: "", confirm: "" });
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     if (form.new !== form.confirm) {
-      alert("Konfirmasi password baru tidak cocok.");
+      await alert("Konfirmasi password baru tidak cocok.", {
+        title: "Password Tidak Cocok",
+      });
       return;
     }
     setSaving(true);
@@ -226,10 +243,13 @@ function PasswordModal({ onClose }) {
         oldPassword: form.old,
         newPassword: form.new,
       });
-      alert("Password berhasil diganti.");
+      await alert("Password berhasil diganti.", { title: "Berhasil" });
       onClose();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal mengganti password."));
+      await alert(getErrorMessage(err, "Gagal mengganti password."), {
+        title: "Gagal Mengganti Password",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -273,6 +293,7 @@ function PasswordModal({ onClose }) {
 // men-generate satu kali lewat halaman Pengaturan, QR Code lama otomatis
 // dinonaktifkan setiap kali regenerasi dilakukan.
 function GenerateQrModal({ hasExisting, onClose, onSaved }) {
+  const { alert } = useModal();
   const [saving, setSaving] = useState(false);
 
   const handleGenerate = async () => {
@@ -281,7 +302,10 @@ function GenerateQrModal({ hasExisting, onClose, onSaved }) {
       await api.post("/settings/qr-code/generate");
       onSaved();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal men-generate QR Code."));
+      await alert(getErrorMessage(err, "Gagal men-generate QR Code."), {
+        title: "Gagal Generate QR Code",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -315,6 +339,7 @@ function GenerateQrModal({ hasExisting, onClose, onSaved }) {
 // [editData] diisi kalau modal dibuka untuk mengedit entri yang sudah ada
 // (null berarti mode tambah baru).
 function HariLiburModal({ existing, editData, onClose, onSaved }) {
+  const { alert } = useModal();
   const isEdit = !!editData;
   const [mulai, setMulai] = useState(editData?.tanggal_mulai || "");
   const [selesai, setSelesai] = useState(editData?.tanggal_selesai || "");
@@ -323,11 +348,15 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
 
   const handleSave = async () => {
     if (!mulai || !selesai) {
-      alert("Tanggal mulai dan tanggal selesai wajib diisi.");
+      await alert("Tanggal mulai dan tanggal selesai wajib diisi.", {
+        title: "Data Belum Lengkap",
+      });
       return;
     }
     if (selesai < mulai) {
-      alert("Tanggal selesai tidak boleh sebelum tanggal mulai.");
+      await alert("Tanggal selesai tidak boleh sebelum tanggal mulai.", {
+        title: "Tanggal Tidak Valid",
+      });
       return;
     }
 
@@ -338,8 +367,9 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
       return mulai <= h.tanggal_selesai && selesai >= h.tanggal_mulai;
     });
     if (overlaps) {
-      alert(
+      await alert(
         "Rentang tanggal ini bertumpuk dengan hari libur lain yang sudah ada.",
+        { title: "Tanggal Bertumpuk" },
       );
       return;
     }
@@ -361,7 +391,10 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
       await api.put("/settings", { national_holidays: next });
       onSaved();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan hari libur."));
+      await alert(getErrorMessage(err, "Gagal menyimpan hari libur."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -431,6 +464,7 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
 
 export default function Pengaturan() {
   const { user } = useAuth();
+  const { alert, confirm } = useModal();
   const isAdmin = user?.role === "admin"; // Pimpinan: hanya lihat, tidak bisa ubah konfigurasi
   const [activeModal, setActiveModal] = useState(null);
   const [settingsData, setSettingsData] = useState(null);
@@ -451,7 +485,10 @@ export default function Pengaturan() {
       const res = await api.get("/settings");
       setSettingsData(res.data.data);
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal memuat info sistem."));
+      await alert(getErrorMessage(err, "Gagal memuat info sistem."), {
+        title: "Gagal Memuat Data",
+        danger: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -473,6 +510,7 @@ export default function Pengaturan() {
   useEffect(() => {
     loadSettings();
     loadQr();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Menormalisasi data hari libur ke bentuk rentang tanggal + keterangan.
@@ -526,13 +564,21 @@ export default function Pengaturan() {
       holiday.tanggal_mulai === holiday.tanggal_selesai
         ? holiday.tanggal_mulai
         : `${holiday.tanggal_mulai} s/d ${holiday.tanggal_selesai}`;
-    if (!window.confirm(`Hapus hari libur ${label}?`)) return;
+    const confirmed = await confirm(`Hapus hari libur ${label}?`, {
+      title: "Hapus Hari Libur",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       const next = holidays.filter((h) => h !== holiday);
       await api.put("/settings", { national_holidays: next });
       await loadSettings();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menghapus hari libur."));
+      await alert(getErrorMessage(err, "Gagal menghapus hari libur."), {
+        title: "Gagal Menghapus",
+        danger: true,
+      });
     }
   };
 

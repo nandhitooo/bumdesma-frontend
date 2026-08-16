@@ -3,6 +3,7 @@ import Topbar from "../components/Topbar";
 import SaturdayPicker from "../components/SaturdayPicker";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { useModal } from "../context/ModalContext";
 
 // Mencari Sabtu terdekat (hari ini kalau kebetulan Sabtu, atau Sabtu berikutnya)
 // sebagai tanggal default saat halaman pertama kali dibuka.
@@ -15,6 +16,7 @@ function defaultSaturday() {
 
 export default function Piket() {
   const { user } = useAuth();
+  const { alert, confirm } = useModal();
   const isAdmin = user?.role === "admin";
 
   const [tanggal, setTanggal] = useState(defaultSaturday());
@@ -39,7 +41,10 @@ export default function Piket() {
       setPiket(piketRes.data.data);
       if (pegawaiRes) setPegawaiList(pegawaiRes.data.data);
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal memuat data piket."));
+      await alert(getErrorMessage(err, "Gagal memuat data piket."), {
+        title: "Gagal Memuat Data",
+        danger: true,
+      });
     } finally {
       setLoading(false);
     }
@@ -47,6 +52,7 @@ export default function Piket() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tanggal]);
 
   const openAssign = () => {
@@ -58,7 +64,9 @@ export default function Piket() {
     if (!form.userId) return;
     const dayOfWeek = new Date(`${tanggal}T00:00:00`).getDay();
     if (dayOfWeek !== 6) {
-      alert("Jadwal piket hanya berlaku untuk hari Sabtu.");
+      await alert("Jadwal piket hanya berlaku untuk hari Sabtu.", {
+        title: "Tanggal Tidak Valid",
+      });
       return;
     }
     try {
@@ -66,30 +74,48 @@ export default function Piket() {
       setShowModal(false);
       await loadData();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menyimpan jadwal piket."));
+      await alert(getErrorMessage(err, "Gagal menyimpan jadwal piket."), {
+        title: "Gagal Menyimpan",
+        danger: true,
+      });
     }
   };
 
   const handleHapus = async (id) => {
-    if (!window.confirm("Hapus jadwal piket ini?")) return;
+    const confirmed = await confirm("Hapus jadwal piket ini?", {
+      title: "Hapus Jadwal Piket",
+      confirmLabel: "Hapus",
+      danger: true,
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/piket/${id}`);
       await loadData();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menghapus jadwal piket."));
+      await alert(getErrorMessage(err, "Gagal menghapus jadwal piket."), {
+        title: "Gagal Menghapus",
+        danger: true,
+      });
     }
   };
 
   const [notifyingId, setNotifyingId] = useState(null);
 
   const handleNotify = async (p) => {
-    if (!window.confirm(`Kirim notifikasi piket ke ${p.user?.name}?`)) return;
+    const confirmed = await confirm(
+      `Kirim notifikasi piket ke ${p.user?.name}?`,
+      { title: "Kirim Notifikasi", confirmLabel: "Kirim" },
+    );
+    if (!confirmed) return;
     setNotifyingId(p.id);
     try {
       await api.post(`/piket/${p.id}/notify`);
       await loadData();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal mengirim notifikasi."));
+      await alert(getErrorMessage(err, "Gagal mengirim notifikasi."), {
+        title: "Gagal Mengirim",
+        danger: true,
+      });
     } finally {
       setNotifyingId(null);
     }
