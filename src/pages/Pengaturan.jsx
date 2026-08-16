@@ -305,26 +305,63 @@ function GenerateQrModal({ hasExisting, onClose, onSaved }) {
   );
 }
 
-// Menambahkan tanggal hari libur nasional / cuti bersama. Tanggal yang
-// masuk daftar ini akan otomatis menutup akses scanning karyawan pada
-// tanggal tersebut.
-function HariLiburModal({ existing, onClose, onSaved }) {
-  const [tanggal, setTanggal] = useState("");
+// Menambahkan/mengedit rentang tanggal hari libur nasional / cuti bersama.
+// Mendukung rentang multi-hari (mis. libur panjang Lebaran) dengan pola
+// input yang sama seperti form Izin/Cuti di app mobile: tanggal mulai +
+// tanggal selesai, plus keterangan bebas untuk menjelaskan hari libur
+// tersebut. Tanggal yang masuk rentang ini akan otomatis menutup akses
+// scanning karyawan.
+//
+// [editData] diisi kalau modal dibuka untuk mengedit entri yang sudah ada
+// (null berarti mode tambah baru).
+function HariLiburModal({ existing, editData, onClose, onSaved }) {
+  const isEdit = !!editData;
+  const [mulai, setMulai] = useState(editData?.tanggal_mulai || "");
+  const [selesai, setSelesai] = useState(editData?.tanggal_selesai || "");
+  const [keterangan, setKeterangan] = useState(editData?.keterangan || "");
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    if (!tanggal) return;
-    if (existing.includes(tanggal)) {
-      alert("Tanggal ini sudah ada di daftar hari libur.");
+    if (!mulai || !selesai) {
+      alert("Tanggal mulai dan tanggal selesai wajib diisi.");
       return;
     }
+    if (selesai < mulai) {
+      alert("Tanggal selesai tidak boleh sebelum tanggal mulai.");
+      return;
+    }
+
+    // Cegah rentang tanggal yang bertumpuk dengan entri hari libur lain
+    // (kecuali dengan dirinya sendiri saat mode edit).
+    const overlaps = existing.some((h) => {
+      if (isEdit && h === editData) return false;
+      return mulai <= h.tanggal_selesai && selesai >= h.tanggal_mulai;
+    });
+    if (overlaps) {
+      alert(
+        "Rentang tanggal ini bertumpuk dengan hari libur lain yang sudah ada.",
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      const next = [...existing, tanggal].sort();
+      const entry = {
+        tanggal_mulai: mulai,
+        tanggal_selesai: selesai,
+        keterangan,
+      };
+      let next;
+      if (isEdit) {
+        next = existing.map((h) => (h === editData ? entry : h));
+      } else {
+        next = [...existing, entry];
+      }
+      next.sort((a, b) => a.tanggal_mulai.localeCompare(b.tanggal_mulai));
       await api.put("/settings", { national_holidays: next });
       onSaved();
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal menambahkan hari libur."));
+      alert(getErrorMessage(err, "Gagal menyimpan hari libur."));
     } finally {
       setSaving(false);
     }
@@ -332,24 +369,60 @@ function HariLiburModal({ existing, onClose, onSaved }) {
 
   return (
     <ModalWrapper
-      title="Tambah Hari Libur Nasional"
+      title={isEdit ? "Edit Hari Libur" : "Tambah Hari Libur Nasional"}
       onClose={onClose}
       onSave={handleSave}
       saving={saving}
     >
-      <div>
-        <label className="text-xs font-bold text-gray-500 mb-1 block">
-          Tanggal
-        </label>
-        <input
-          type="date"
-          value={tanggal}
-          onChange={(e) => setTanggal(e.target.value)}
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
-        />
-        <p className="text-xs text-gray-400 font-semibold mt-2">
-          Karyawan tidak akan bisa melakukan absensi pada tanggal yang ditandai
-          sebagai hari libur.
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">
+              Tanggal Mulai
+            </label>
+            <input
+              type="date"
+              value={mulai}
+              onChange={(e) => {
+                const val = e.target.value;
+                setMulai(val);
+                // Jaga agar tanggal selesai tidak pernah lebih awal dari
+                // tanggal mulai yang baru dipilih.
+                if (!selesai || selesai < val) setSelesai(val);
+              }}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-500 mb-1 block">
+              Tanggal Selesai
+            </label>
+            <input
+              type="date"
+              value={selesai}
+              min={mulai || undefined}
+              onChange={(e) => setSelesai(e.target.value)}
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs font-bold text-gray-500 mb-1 block">
+            Keterangan
+          </label>
+          <input
+            value={keterangan}
+            onChange={(e) => setKeterangan(e.target.value)}
+            placeholder="Contoh: Cuti Bersama Hari Raya Idul Fitri"
+            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+          />
+        </div>
+
+        <p className="text-xs text-gray-400 font-semibold -mt-1">
+          Untuk hari libur satu hari, isi tanggal mulai dan tanggal selesai
+          dengan tanggal yang sama. Karyawan tidak dapat melakukan absensi pada
+          rentang tanggal ini.
         </p>
       </div>
     </ModalWrapper>
@@ -364,6 +437,13 @@ export default function Pengaturan() {
   const [loading, setLoading] = useState(true);
   const [qr, setQr] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
+
+  // Filter bulan untuk daftar Hari Libur Nasional, dan entri yang sedang
+  // diedit (null = modal tambah baru).
+  const [holidayFilterMonth, setHolidayFilterMonth] = useState("");
+  const [editingHoliday, setEditingHoliday] = useState(null);
+
+  const todayISO = () => new Date().toISOString().slice(0, 10);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -395,27 +475,60 @@ export default function Pengaturan() {
     loadQr();
   }, []);
 
+  // Menormalisasi data hari libur ke bentuk rentang tanggal + keterangan.
+  // Mendukung format lama (array tanggal string tunggal, mis.
+  // ["2026-08-17"]) sekaligus format baru (array objek
+  // { tanggal_mulai, tanggal_selesai, keterangan }) supaya data lama yang
+  // sudah tersimpan tetap tampil dengan benar.
   const getHolidays = () => {
     const raw = settingsData?.settings?.national_holidays;
+    let list;
     try {
-      return typeof raw === "string" ? JSON.parse(raw) : raw || [];
+      list = typeof raw === "string" ? JSON.parse(raw) : raw || [];
     } catch {
-      return [];
+      list = [];
     }
+    return list.map((item) =>
+      typeof item === "string"
+        ? { tanggal_mulai: item, tanggal_selesai: item, keterangan: "" }
+        : {
+            tanggal_mulai: item.tanggal_mulai ?? item.start ?? "",
+            tanggal_selesai:
+              item.tanggal_selesai ??
+              item.end ??
+              item.tanggal_mulai ??
+              item.start ??
+              "",
+            keterangan: item.keterangan ?? "",
+          },
+    );
   };
 
-  const close = () => setActiveModal(null);
+  const holidays = getHolidays();
+
+  const close = () => {
+    setActiveModal(null);
+    setEditingHoliday(null);
+  };
   const saved = () => {
     close();
     loadSettings();
     loadQr();
   };
 
-  const handleDeleteHoliday = async (tanggal) => {
-    if (!window.confirm(`Hapus tanggal ${tanggal} dari daftar hari libur?`))
-      return;
+  const openHolidayModal = (holiday = null) => {
+    setEditingHoliday(holiday);
+    setActiveModal("hari-libur");
+  };
+
+  const handleDeleteHoliday = async (holiday) => {
+    const label =
+      holiday.tanggal_mulai === holiday.tanggal_selesai
+        ? holiday.tanggal_mulai
+        : `${holiday.tanggal_mulai} s/d ${holiday.tanggal_selesai}`;
+    if (!window.confirm(`Hapus hari libur ${label}?`)) return;
     try {
-      const next = getHolidays().filter((h) => h !== tanggal);
+      const next = holidays.filter((h) => h !== holiday);
       await api.put("/settings", { national_holidays: next });
       await loadSettings();
     } catch (err) {
@@ -451,7 +564,6 @@ export default function Pengaturan() {
   const jadwalSabtu = settingsData?.workSchedules?.find(
     (ws) => ws.day_type === "sabtu",
   );
-  const holidays = getHolidays();
   const settings = settingsData?.settings || {};
   const lat = settings.office_latitude;
   const lng = settings.office_longitude;
@@ -493,6 +605,20 @@ export default function Pengaturan() {
     },
   ];
   const cards = allCards.filter((c) => isAdmin || !c.adminOnly);
+
+  // Daftar hari libur yang sudah difilter berdasarkan bulan terpilih
+  // (kalau ada), diurutkan berdasarkan tanggal mulai.
+  const filteredHolidays = holidays
+    .filter((h) => {
+      if (!holidayFilterMonth) return true;
+      const [fy, fm] = holidayFilterMonth.split("-");
+      const monthStart = `${fy}-${fm}-01`;
+      const monthEnd = `${fy}-${fm}-31`;
+      return h.tanggal_mulai <= monthEnd && h.tanggal_selesai >= monthStart;
+    })
+    .sort((a, b) => a.tanggal_mulai.localeCompare(b.tanggal_mulai));
+
+  const today = todayISO();
 
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
@@ -681,14 +807,14 @@ export default function Pengaturan() {
 
             {/* Hari Libur Nasional */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
                 <div className="flex items-center gap-2 text-gray-700 font-extrabold">
                   <i className="fa-solid fa-calendar-day text-green-700"></i>{" "}
                   Hari Libur Nasional
                 </div>
                 {isAdmin && (
                   <button
-                    onClick={() => setActiveModal("hari-libur")}
+                    onClick={() => openHolidayModal(null)}
                     className="px-4 py-2 rounded-xl text-white font-bold text-xs flex items-center gap-1.5 hover:opacity-90"
                     style={{ backgroundColor: "#1a7a1a" }}
                   >
@@ -696,34 +822,89 @@ export default function Pengaturan() {
                   </button>
                 )}
               </div>
-              {holidays.length === 0 ? (
+
+              {/* Filter bulan */}
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <label className="text-xs font-bold text-gray-500">
+                  Filter Bulan:
+                </label>
+                <input
+                  type="month"
+                  value={holidayFilterMonth}
+                  onChange={(e) => setHolidayFilterMonth(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
+                />
+                {holidayFilterMonth && (
+                  <button
+                    onClick={() => setHolidayFilterMonth("")}
+                    className="text-xs font-bold text-gray-400 hover:text-gray-600"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              {filteredHolidays.length === 0 ? (
                 <p className="text-sm text-gray-500 font-semibold">
-                  Belum ada hari libur yang ditetapkan.
+                  {holidayFilterMonth
+                    ? "Tidak ada hari libur pada bulan ini."
+                    : "Belum ada hari libur yang ditetapkan."}
                 </p>
               ) : (
-                <div className="flex flex-wrap gap-2">
-                  {holidays.map((h) => (
-                    <span
-                      key={h}
-                      className="flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-bold bg-gray-100 text-gray-700"
-                    >
-                      {h}
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDeleteHoliday(h)}
-                          className="text-gray-400 hover:text-red-500"
-                          title="Hapus"
-                        >
-                          <i className="fa-solid fa-xmark"></i>
-                        </button>
-                      )}
-                    </span>
-                  ))}
+                <div className="flex flex-col gap-2">
+                  {filteredHolidays.map((h, i) => {
+                    const isSingleDay = h.tanggal_mulai === h.tanggal_selesai;
+                    // Hari libur yang tanggal selesainya sudah lewat tidak
+                    // lagi bisa diedit/dihapus - hanya ditampilkan sebagai
+                    // riwayat.
+                    const isUpcoming = h.tanggal_selesai >= today;
+                    return (
+                      <div
+                        key={`${h.tanggal_mulai}-${h.tanggal_selesai}-${i}`}
+                        className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gray-50 flex-wrap"
+                      >
+                        <div>
+                          <div className="text-sm font-extrabold text-gray-800">
+                            {isSingleDay
+                              ? h.tanggal_mulai
+                              : `${h.tanggal_mulai}  —  ${h.tanggal_selesai}`}
+                            {!isUpcoming && (
+                              <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gray-200 text-gray-500">
+                                Selesai
+                              </span>
+                            )}
+                          </div>
+                          {h.keterangan && (
+                            <div className="text-xs font-semibold text-gray-500 mt-0.5">
+                              {h.keterangan}
+                            </div>
+                          )}
+                        </div>
+                        {isAdmin && isUpcoming && (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openHolidayModal(h)}
+                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                            >
+                              edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteHoliday(h)}
+                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                            >
+                              hapus
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+
               <p className="text-xs text-gray-400 font-semibold mt-3">
-                Pegawai tidak dapat melakukan absensi pada tanggal yang ditandai
-                sebagai hari libur.
+                Pegawai tidak dapat melakukan absensi pada tanggal yang termasuk
+                dalam rentang hari libur.
               </p>
             </div>
           </div>
@@ -760,7 +941,12 @@ export default function Pengaturan() {
         <GenerateQrModal hasExisting={!!qr} onClose={close} onSaved={saved} />
       )}
       {activeModal === "hari-libur" && (
-        <HariLiburModal existing={holidays} onClose={close} onSaved={saved} />
+        <HariLiburModal
+          existing={holidays}
+          editData={editingHoliday}
+          onClose={close}
+          onSaved={saved}
+        />
       )}
       {activeModal === "jadwal-reguler" && jadwalReguler && (
         <JadwalKerjaModal
