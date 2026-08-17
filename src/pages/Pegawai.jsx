@@ -123,114 +123,210 @@ export default function Pegawai() {
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
       <Topbar title="Pegawai" />
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         {isAdmin && (
           <button
             onClick={openAdd}
-            className="mb-5 px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center gap-2 hover:opacity-90 transition-all"
+            className="mb-5 w-full sm:w-auto px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all"
             style={{ backgroundColor: "#1a7a1a" }}
           >
             <i className="fa-solid fa-plus"></i> Tambah Pegawai
           </button>
         )}
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-6 text-center text-sm font-semibold text-gray-500">
-              Memuat data...
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Nama
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Jabatan
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    NIP
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Email Pemulihan
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Status
-                  </th>
-                  {isAdmin && <th className="px-5 py-4"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {pegawai.map((p, i) => (
-                  <tr
-                    key={p.id}
-                    className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}
-                  >
-                    <td className="px-5 py-3 font-extrabold text-gray-800">
-                      {p.name}
-                    </td>
-                    <td className="px-5 py-3 font-bold text-gray-700">
-                      {p.jabatan}
-                    </td>
-                    <td className="px-5 py-3 text-xs font-semibold text-gray-500">
-                      {p.nip}
-                    </td>
-                    <td className="px-5 py-3 text-xs font-semibold">
+        {loading ? (
+          <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm font-semibold text-gray-500">
+            Memuat data...
+          </div>
+        ) : pegawai.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
+            <i className="fa-solid fa-users text-3xl text-gray-300 mb-2"></i>
+            <p className="text-sm font-semibold text-gray-500">
+              Belum ada data pegawai.
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Tampilan kartu - mobile & tablet */}
+            <div className="flex flex-col gap-3 lg:hidden">
+              {pegawai.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-white rounded-2xl shadow-sm p-4 flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-extrabold text-gray-800">
+                        {p.name}
+                      </div>
+                      <div className="text-xs font-bold text-gray-500 mt-0.5">
+                        {p.jabatan || "-"}
+                      </div>
+                    </div>
+                    {isAdmin ? (
+                      <button
+                        onClick={() => handleToggleStatus(p)}
+                        className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap ${
+                          p.status === "active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-400"
+                        }`}
+                      >
+                        {p.status === "active" ? "Aktif" : "Non-Aktif"}
+                      </button>
+                    ) : (
+                      <span
+                        className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap ${
+                          p.status === "active"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-400"
+                        }`}
+                      >
+                        {p.status === "active" ? "Aktif" : "Non-Aktif"}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <div className="font-bold text-gray-400">NIP</div>
+                      <div className="font-semibold text-gray-700 break-all">
+                        {p.nip}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-400">
+                        Email Pemulihan
+                      </div>
                       {p.email ? (
-                        <span className="text-gray-700">{p.email}</span>
+                        <div className="font-semibold text-gray-700 break-all">
+                          {p.email}
+                        </div>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-600 font-bold">
+                        <span className="inline-flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-600 font-bold">
                           <i className="fa-solid fa-triangle-exclamation"></i>{" "}
                           Belum diisi
                         </span>
                       )}
-                    </td>
-                    <td className="px-5 py-3">
-                      {isAdmin ? (
-                        <button
-                          onClick={() => handleToggleStatus(p)}
-                          className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
-                        >
-                          {p.status === "active" ? "Aktif" : "Non-Aktif"}
-                        </button>
-                      ) : (
-                        <span
-                          className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
-                        >
-                          {p.status === "active" ? "Aktif" : "Non-Aktif"}
-                        </span>
-                      )}
-                    </td>
-                    {isAdmin && (
-                      <td className="px-5 py-3">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => openEdit(p)}
-                            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
-                          >
-                            edit
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(p)}
-                            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
-                          >
-                            hapus
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </div>
+                  </div>
+
+                  {isAdmin && (
+                    <div className="flex gap-2 pt-2 border-t border-gray-100">
+                      <button
+                        onClick={() => openEdit(p)}
+                        className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(p)}
+                        className="flex-1 py-2 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Tampilan tabel - desktop */}
+            <div className="hidden lg:block bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[800px]">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Nama
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Jabatan
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        NIP
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Email Pemulihan
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Status
+                      </th>
+                      {isAdmin && <th className="px-5 py-4"></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pegawai.map((p, i) => (
+                      <tr
+                        key={p.id}
+                        className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}
+                      >
+                        <td className="px-5 py-3 font-extrabold text-gray-800">
+                          {p.name}
+                        </td>
+                        <td className="px-5 py-3 font-bold text-gray-700">
+                          {p.jabatan}
+                        </td>
+                        <td className="px-5 py-3 text-xs font-semibold text-gray-500">
+                          {p.nip}
+                        </td>
+                        <td className="px-5 py-3 text-xs font-semibold">
+                          {p.email ? (
+                            <span className="text-gray-700">{p.email}</span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-yellow-50 text-yellow-600 font-bold">
+                              <i className="fa-solid fa-triangle-exclamation"></i>{" "}
+                              Belum diisi
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          {isAdmin ? (
+                            <button
+                              onClick={() => handleToggleStatus(p)}
+                              className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
+                            >
+                              {p.status === "active" ? "Aktif" : "Non-Aktif"}
+                            </button>
+                          ) : (
+                            <span
+                              className={`font-bold ${p.status === "active" ? "text-green-600" : "text-gray-400"}`}
+                            >
+                              {p.status === "active" ? "Aktif" : "Non-Aktif"}
+                            </span>
+                          )}
+                        </td>
+                        {isAdmin && (
+                          <td className="px-5 py-3">
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => openEdit(p)}
+                                className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                              >
+                                edit
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(p)}
+                                className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                              >
+                                hapus
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Modal Tambah/Edit - hanya bisa dibuka Admin, jadi cukup dijaga oleh tombol di atas */}
       {isAdmin && showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
             <h2 className="text-lg font-extrabold text-gray-800 mb-4">
               {editData ? "Edit Pegawai" : "Tambah Pegawai"}

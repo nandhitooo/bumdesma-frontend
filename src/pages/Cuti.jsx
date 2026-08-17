@@ -11,6 +11,18 @@ const STATUS_LABEL = {
   rejected: "Ditolak",
 };
 
+const JENIS_LABEL = {
+  sakit: "Sakit",
+  izin: "Izin",
+  cuti: "Cuti",
+};
+
+const JENIS_STYLE = {
+  sakit: "bg-red-50 text-red-600",
+  izin: "bg-blue-50 text-blue-600",
+  cuti: "bg-purple-50 text-purple-600",
+};
+
 export default function Cuti() {
   const { user } = useAuth();
   const { alert } = useModal();
@@ -37,7 +49,6 @@ export default function Cuti() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Admin: meneruskan pengajuan ke Pimpinan
   const handleReview = async (id) => {
     try {
       await api.put(`/leaves/${id}/review`);
@@ -50,7 +61,6 @@ export default function Cuti() {
     }
   };
 
-  // Pimpinan: keputusan akhir
   const handleDecision = async (id, decision) => {
     try {
       await api.put(`/leaves/${id}/decision`, { decision });
@@ -71,18 +81,50 @@ export default function Cuti() {
 
   const pendingCount = cuti.filter((c) => c.status === "pending").length;
 
+  const renderActions = (c) => {
+    if (user?.role === "admin" && c.status === "pending") {
+      return (
+        <button
+          onClick={() => handleReview(c.id)}
+          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+        >
+          Teruskan
+        </button>
+      );
+    }
+    if (user?.role === "pimpinan" && c.status === "diteruskan") {
+      return (
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleDecision(c.id, "approved")}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-700"
+          >
+            <i className="fa-solid fa-check mr-1"></i>Setuju
+          </button>
+          <button
+            onClick={() => handleDecision(c.id, "rejected")}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600"
+          >
+            <i className="fa-solid fa-xmark mr-1"></i>Tolak
+          </button>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
       <Topbar title="Izin/Cuti" />
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="p-4 md:p-6">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div className="relative">
             {pendingCount > 0 && (
               <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold z-10">
                 {pendingCount}
               </span>
             )}
-            <div className="px-5 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-sm font-bold text-gray-700">
+            <div className="px-4 md:px-5 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-xs md:text-sm font-bold text-gray-700">
               {user?.role === "admin"
                 ? "Pengajuan Menunggu Tinjauan"
                 : "Pengajuan Menunggu Keputusan"}
@@ -90,114 +132,162 @@ export default function Cuti() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-6 text-center text-sm font-semibold text-gray-500">
-              Memuat data...
-            </div>
-          ) : cuti.length === 0 ? (
-            <div className="p-6 text-center text-sm font-semibold text-gray-500">
+        {loading ? (
+          <div className="bg-white rounded-2xl shadow-sm p-10 text-center text-sm font-semibold text-gray-500">
+            <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+            Memuat data...
+          </div>
+        ) : cuti.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
+            <i className="fa-solid fa-inbox text-3xl text-gray-300 mb-2"></i>
+            <p className="text-sm font-semibold text-gray-500">
               Belum ada pengajuan izin/cuti.
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Nama
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Jenis
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Tanggal
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Alasan
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Lampiran
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Status
-                  </th>
-                  <th className="px-5 py-4"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {cuti.map((c, i) => (
-                  <tr
-                    key={c.id}
-                    className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}
-                  >
-                    <td className="px-5 py-3 font-extrabold text-gray-800">
-                      {c.user?.name}
-                    </td>
-                    <td className="px-5 py-3 font-bold text-gray-700 capitalize">
-                      {c.jenis}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-semibold text-gray-500">
-                      {c.tanggal_mulai} s/d {c.tanggal_selesai}
-                    </td>
-                    <td className="px-5 py-3 text-sm font-semibold text-gray-500">
-                      {c.alasan}
-                    </td>
-                    <td className="px-5 py-3">
-                      {c.file_lampiran ? (
-                        <a
-                          href={`${FILE_BASE_URL}${c.file_lampiran}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all"
-                        >
-                          <i className="fa-solid fa-paperclip"></i> Lihat File
-                        </a>
-                      ) : (
-                        <span className="text-xs font-semibold text-gray-400">
-                          -
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Tampilan kartu - mobile & tablet */}
+            <div className="flex flex-col gap-3 lg:hidden">
+              {cuti.map((c) => (
+                <div
+                  key={c.id}
+                  className="bg-white rounded-2xl shadow-sm p-4 flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-extrabold text-gray-800">
+                        {c.user?.name}
+                      </div>
                       <span
-                        className={`px-3 py-1 rounded-lg text-xs font-bold ${statusStyle(c.status)}`}
+                        className={`inline-block mt-1 px-2 py-0.5 rounded-lg text-[11px] font-bold ${
+                          JENIS_STYLE[c.jenis] || "bg-gray-100 text-gray-600"
+                        }`}
                       >
-                        {STATUS_LABEL[c.status] || c.status}
+                        {JENIS_LABEL[c.jenis] || c.jenis}
                       </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      {user?.role === "admin" && c.status === "pending" && (
-                        <button
-                          onClick={() => handleReview(c.id)}
-                          className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600"
-                        >
-                          Teruskan
-                        </button>
-                      )}
-                      {user?.role === "pimpinan" &&
-                        c.status === "diteruskan" && (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleDecision(c.id, "approved")}
-                              className="px-2 py-1 rounded text-xs font-bold text-white bg-green-600 hover:bg-green-700"
+                    </div>
+                    <span
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap ${statusStyle(c.status)}`}
+                    >
+                      {STATUS_LABEL[c.status] || c.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                    <i className="fa-solid fa-calendar-days text-gray-400"></i>
+                    {c.tanggal_mulai} s/d {c.tanggal_selesai}
+                  </div>
+
+                  <p className="text-sm font-semibold text-gray-600">
+                    {c.alasan}
+                  </p>
+
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                    {c.file_lampiran ? (
+                      <a
+                        href={`${FILE_BASE_URL}${c.file_lampiran}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all"
+                      >
+                        <i className="fa-solid fa-paperclip"></i> Lihat File
+                      </a>
+                    ) : (
+                      <span className="text-xs font-semibold text-gray-400">
+                        Tanpa lampiran
+                      </span>
+                    )}
+                    {renderActions(c)}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Tampilan tabel - desktop */}
+            <div className="hidden lg:block bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px]">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Nama
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Jenis
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Tanggal
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Alasan
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Lampiran
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Status
+                      </th>
+                      <th className="px-5 py-4"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cuti.map((c, i) => (
+                      <tr
+                        key={c.id}
+                        className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}
+                      >
+                        <td className="px-5 py-3 font-extrabold text-gray-800">
+                          {c.user?.name}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                              JENIS_STYLE[c.jenis] ||
+                              "bg-gray-100 text-gray-600"
+                            }`}
+                          >
+                            {JENIS_LABEL[c.jenis] || c.jenis}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-sm font-semibold text-gray-500 whitespace-nowrap">
+                          {c.tanggal_mulai} s/d {c.tanggal_selesai}
+                        </td>
+                        <td className="px-5 py-3 text-sm font-semibold text-gray-500 max-w-xs">
+                          {c.alasan}
+                        </td>
+                        <td className="px-5 py-3">
+                          {c.file_lampiran ? (
+                            <a
+                              href={`${FILE_BASE_URL}${c.file_lampiran}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-all"
                             >
-                              ✓ Setuju
-                            </button>
-                            <button
-                              onClick={() => handleDecision(c.id, "rejected")}
-                              className="px-2 py-1 rounded text-xs font-bold text-white bg-red-500 hover:bg-red-600"
-                            >
-                              ✕ Tolak
-                            </button>
-                          </div>
-                        )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                              <i className="fa-solid fa-paperclip"></i> Lihat
+                              File
+                            </a>
+                          ) : (
+                            <span className="text-xs font-semibold text-gray-400">
+                              -
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={`px-3 py-1 rounded-lg text-xs font-bold ${statusStyle(c.status)}`}
+                          >
+                            {STATUS_LABEL[c.status] || c.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3">{renderActions(c)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

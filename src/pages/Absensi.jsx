@@ -132,23 +132,32 @@ export default function Absensi() {
     return "text-gray-400"; // belum absen
   };
 
+  const statusBg = (s) => {
+    if (s === "tepat_waktu" || s === "lembur")
+      return "bg-green-50 text-green-600";
+    if (s === "terlambat") return "bg-orange-50 text-orange-500";
+    if (s === "izin_cuti") return "bg-blue-50 text-blue-500";
+    if (s === "alpa") return "bg-red-50 text-red-500";
+    return "bg-gray-100 text-gray-400"; // belum absen
+  };
+
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
       <Topbar title="Absensi" />
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm">
-            <i className="fa-solid fa-calendar-days text-gray-500"></i>
+      <div className="p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-5 gap-3">
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-auto">
+            <i className="fa-solid fa-calendar-days text-gray-500 shrink-0"></i>
             <input
               type="date"
               value={tanggal}
               onChange={(e) => setTanggal(e.target.value)}
-              className="outline-none text-sm font-semibold text-gray-700 bg-transparent"
+              className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
             />
           </div>
 
           {!loading && rows.length > 0 && (
-            <div className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-sm font-bold text-gray-700">
+            <div className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-xs sm:text-sm font-bold text-gray-700">
               {rows.length - belumAbsenCount} / {rows.length} karyawan sudah
               absen
               {belumAbsenCount > 0 && (
@@ -160,82 +169,142 @@ export default function Absensi() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-          {loading ? (
-            <div className="p-6 text-center text-sm font-semibold text-gray-500">
-              Memuat data...
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="p-6 text-center text-sm font-semibold text-gray-500">
+        {loading ? (
+          <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm font-semibold text-gray-500">
+            Memuat data...
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
+            <i className="fa-solid fa-inbox text-3xl text-gray-300 mb-2"></i>
+            <p className="text-sm font-semibold text-gray-500">
               Belum ada data pegawai.
-            </div>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Nama
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Jabatan
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Masuk
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Pulang
-                  </th>
-                  <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                    Status
-                  </th>
-                  {canEdit && <th className="px-5 py-4"></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr
-                    key={r.userId}
-                    className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}
-                  >
-                    <td className="px-5 py-3 font-extrabold text-gray-800">
-                      {r.nama}
-                    </td>
-                    <td className="px-5 py-3 font-semibold text-gray-600 text-sm">
-                      {r.jabatan || "-"}
-                    </td>
-                    <td className="px-5 py-3 font-extrabold text-gray-800">
-                      {formatJam(r.jam_masuk)}
-                    </td>
-                    <td className="px-5 py-3 font-extrabold text-gray-800">
-                      {formatJam(r.jam_pulang)}
-                    </td>
-                    <td
-                      className={`px-5 py-3 font-bold ${statusColor(r.status)}`}
+            </p>
+          </div>
+        ) : (
+          <>
+            {/* Tampilan kartu - mobile & tablet */}
+            <div className="flex flex-col gap-3 lg:hidden">
+              {rows.map((r) => (
+                <div
+                  key={r.userId}
+                  className="bg-white rounded-2xl shadow-sm p-4 flex flex-col gap-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-extrabold text-gray-800">
+                        {r.nama}
+                      </div>
+                      <div className="text-xs font-bold text-gray-500 mt-0.5">
+                        {r.jabatan || "-"}
+                      </div>
+                    </div>
+                    <span
+                      className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap ${statusBg(r.status)}`}
                     >
                       {r.status
                         ? STATUS_LABEL[r.status] || r.status
                         : "Belum Absen"}
-                    </td>
-                    {canEdit && (
-                      <td className="px-5 py-3">
-                        <button
-                          onClick={() => openEdit(r)}
-                          className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-gray-100">
+                    <div>
+                      <div className="font-bold text-gray-400">Masuk</div>
+                      <div className="font-extrabold text-gray-800">
+                        {formatJam(r.jam_masuk)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-400">Pulang</div>
+                      <div className="font-extrabold text-gray-800">
+                        {formatJam(r.jam_pulang)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {canEdit && (
+                    <button
+                      onClick={() => openEdit(r)}
+                      className="mt-1 py-2 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                    >
+                      Edit
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Tampilan tabel - desktop */}
+            <div className="hidden lg:block bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Nama
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Jabatan
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Masuk
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Pulang
+                      </th>
+                      <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
+                        Status
+                      </th>
+                      {canEdit && <th className="px-5 py-4"></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, i) => (
+                      <tr
+                        key={r.userId}
+                        className={i % 2 === 0 ? "bg-gray-50" : "bg-white"}
+                      >
+                        <td className="px-5 py-3 font-extrabold text-gray-800">
+                          {r.nama}
+                        </td>
+                        <td className="px-5 py-3 font-semibold text-gray-600 text-sm">
+                          {r.jabatan || "-"}
+                        </td>
+                        <td className="px-5 py-3 font-extrabold text-gray-800">
+                          {formatJam(r.jam_masuk)}
+                        </td>
+                        <td className="px-5 py-3 font-extrabold text-gray-800">
+                          {formatJam(r.jam_pulang)}
+                        </td>
+                        <td
+                          className={`px-5 py-3 font-bold ${statusColor(r.status)}`}
                         >
-                          edit
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                          {r.status
+                            ? STATUS_LABEL[r.status] || r.status
+                            : "Belum Absen"}
+                        </td>
+                        {canEdit && (
+                          <td className="px-5 py-3">
+                            <button
+                              onClick={() => openEdit(r)}
+                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                            >
+                              edit
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h2 className="text-lg font-extrabold text-gray-800 mb-1">
               Edit Absensi - {editData?.nama}
