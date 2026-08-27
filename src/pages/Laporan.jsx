@@ -98,15 +98,20 @@ export default function Laporan() {
   const handleExport = async (format) => {
     setExporting(format);
     try {
+      // `type` (periodType) dikirim supaya backend tahu kapan harus
+      // menggabungkan 12 bulan sekaligus (laporan tahunan) ketimbang hanya
+      // mengikuti rentang start-end apa adanya.
       const res = await api.get("/reports/attendance/export", {
-        params: { start, end, format },
+        params: { start, end, format, type: periodType },
         responseType: "blob",
       });
       const blob = new Blob([res.data]);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `laporan-absensi-${start}_${end}.${format === "xlsx" ? "xlsx" : "pdf"}`;
+      const filenameSuffix =
+        periodType === "tahunan" ? start.slice(0, 4) : `${start}_${end}`;
+      link.download = `laporan-absensi-${filenameSuffix}.${format === "xlsx" ? "xlsx" : "pdf"}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -270,6 +275,8 @@ export default function Laporan() {
                 </div>
                 <p className="text-xs font-semibold text-gray-400 mt-0.5">
                   Unduh rekap absensi untuk periode yang dipilih di atas.
+                  {periodType === "tahunan" &&
+                    " Laporan tahunan berisi gabungan 12 bulan (Januari - Desember)."}
                 </p>
               </div>
               <div className="flex flex-col xs:flex-row gap-3">
@@ -327,7 +334,7 @@ function StatCard({
         <div
           className={`w-9 h-9 md:w-11 md:h-11 rounded-xl flex items-center justify-center shrink-0 ${iconBg} ${iconColor}`}
         >
-          <i className="fa-solid text-sm md:text-lg fa-solid ${icon}"></i>
+          <i className={`fa-solid text-sm md:text-lg ${icon}`}></i>
         </div>
         <div className="text-xs md:text-sm font-extrabold text-gray-700 leading-tight">
           {label}
