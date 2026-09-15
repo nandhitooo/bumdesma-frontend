@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
+import Pagination from "../components/Pagination";
 import api, { getErrorMessage, FILE_BASE_URL } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
+
+const PAGE_SIZE = 10;
 
 const STATUS_LABEL = {
   pending: "Menunggu Tinjauan Admin",
@@ -28,26 +31,57 @@ export default function Cuti() {
   const { alert } = useModal();
   const [cuti, setCuti] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Pagination server-side + filter status + pencarian nama (params yang
+  // didukung GET /leaves - lihat leave.controller.js).
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+
+  // Penomoran request: mencegah response lama menimpa data yang lebih baru.
+  const requestSeq = useRef(0);
 
   const loadCuti = async () => {
+    const current = ++requestSeq.current;
     setLoading(true);
     try {
-      const res = await api.get("/leaves");
+      const res = await api.get("/leaves", {
+        params: {
+          status: statusFilter || undefined,
+          search: search || undefined,
+          page,
+          limit: PAGE_SIZE,
+        },
+      });
+      if (current !== requestSeq.current) return; // response sudah basi
       setCuti(res.data.data);
+      setTotal(res.data.meta?.total ?? res.data.data.length);
     } catch (err) {
+      if (current !== requestSeq.current) return; // response sudah basi
       await alert(getErrorMessage(err, "Gagal memuat data izin/cuti."), {
         title: "Gagal Memuat Data",
         danger: true,
       });
     } finally {
-      setLoading(false);
+      if (current === requestSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadCuti();
+    // Microtask: setLoading di dalam loadCuti tidak boleh jalan sinkron di
+    // badan effect (rule react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadCuti);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, statusFilter, search]);
+
+  // Debounce input pencarian (400ms) sebelum dikirim ke server.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const handlePageChange = (p) => setPage(p);
 
   const handleReview = async (id) => {
     try {
@@ -79,7 +113,14 @@ export default function Cuti() {
     return "bg-yellow-100 text-yellow-600";
   };
 
-  const pendingCount = cuti.filter((c) => c.status === "pending").length;
+  // Badge "menunggu" menghitung item yang relevan untuk role yang sedang
+  // login: Admin => pending, Pimpinan => diteruskan (lihat renderActions).
+  const actionableCount =
+    user?.role === "admin"
+      ? cuti.filter((c) => c.status === "pending").length
+      : user?.role === "pimpinan"
+        ? cuti.filter((c) => c.status === "diteruskan").length
+        : 0;
 
   const renderActions = (c) => {
     if (user?.role === "admin" && c.status === "pending") {
@@ -119,15 +160,60 @@ export default function Cuti() {
       <div className="p-4 md:p-6">
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div className="relative">
-            {pendingCount > 0 && (
+            {actionableCount > 0 && (
               <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-bold z-10">
-                {pendingCount}
+                {actionableCount}
               </span>
             )}
             <div className="px-4 md:px-5 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-xs md:text-sm font-bold text-gray-700">
               {user?.role === "admin"
                 ? "Pengajuan Menunggu Tinjauan"
                 : "Pengajuan Menunggu Keputusan"}
+            </div>
+          </div>
+
+          {/* Filter status + pencarian nama (server-side) */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm">
+              <i className="fa-solid fa-filter text-gray-500 shrink-0"></i>
+              <select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setPage(1); // filter baru -> mulai dari halaman pertama
+                }}
+                className="outline-none text-sm font-semibold text-gray-700 bg-transparent"
+              >
+                <option value="">Semua Status</option>
+                <option value="pending">Menunggu Tinjauan</option>
+                <option value="diteruskan">Menunggu Keputusan</option>
+                <option value="approved">Disetujui</option>
+                <option value="rejected">Ditolak</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-64">
+              <i className="fa-solid fa-magnifying-glass text-gray-500 shrink-0"></i>
+              <input
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Cari nama karyawan..."
+                className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full min-w-0"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput("");
+                    setPage(1);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 shrink-0"
+                >
+                  <i className="fa-solid fa-circle-xmark"></i>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -139,9 +225,15 @@ export default function Cuti() {
           </div>
         ) : cuti.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
-            <i className="fa-solid fa-inbox text-3xl text-gray-300 mb-2"></i>
+            <i
+              className={`fa-solid ${
+                search || statusFilter ? "fa-magnifying-glass" : "fa-inbox"
+              } text-3xl text-gray-300 mb-2`}
+            ></i>
             <p className="text-sm font-semibold text-gray-500">
-              Belum ada pengajuan izin/cuti.
+              {search || statusFilter
+                ? "Tidak ada pengajuan yang cocok dengan filter."
+                : "Belum ada pengajuan izin/cuti."}
             </p>
           </div>
         ) : (
@@ -201,6 +293,13 @@ export default function Cuti() {
                   </div>
                 </div>
               ))}
+
+              <Pagination
+                page={page}
+                limit={PAGE_SIZE}
+                total={total}
+                onPageChange={handlePageChange}
+              />
             </div>
 
             {/* Tampilan tabel - desktop */}
@@ -286,6 +385,13 @@ export default function Cuti() {
                 </table>
               </div>
             </div>
+
+            <Pagination
+              page={page}
+              limit={PAGE_SIZE}
+              total={total}
+              onPageChange={handlePageChange}
+            />
           </>
         )}
       </div>

@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
 import SaturdayPicker from "../components/SaturdayPicker";
+import Pagination from "../components/Pagination";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
+
+const PAGE_SIZE = 10;
 
 // Mencari Sabtu terdekat (hari ini kalau kebetulan Sabtu, atau Sabtu berikutnya)
 // sebagai tanggal default saat halaman pertama kali dibuka.
@@ -23,15 +26,34 @@ export default function Piket() {
   const [piket, setPiket] = useState([]);
   const [pegawaiList, setPegawaiList] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Pagination & pencarian server-side pada endpoint /piket (params
+  // `search`, `page`, `limit` - lihat piket.controller.js). Dropdown assign
+  // tetap memuat semua karyawan aktif terpisah dari pencarian tabel.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ userId: "" });
   const [notifyingId, setNotifyingId] = useState(null);
 
+  // Penomoran request: mencegah response lama menimpa data yang lebih baru.
+  const requestSeq = useRef(0);
+
   const loadData = async () => {
+    const current = ++requestSeq.current;
     setLoading(true);
     try {
       const requests = [
-        api.get("/piket", { params: { start: tanggal, end: tanggal } }),
+        api.get("/piket", {
+          params: {
+            start: tanggal,
+            end: tanggal,
+            search: search || undefined,
+            page,
+            limit: PAGE_SIZE,
+          },
+        }),
       ];
       if (isAdmin) {
         requests.push(
@@ -39,22 +61,35 @@ export default function Piket() {
         );
       }
       const [piketRes, pegawaiRes] = await Promise.all(requests);
+      if (current !== requestSeq.current) return; // response sudah basi
       setPiket(piketRes.data.data);
+      setTotal(piketRes.data.meta?.total ?? piketRes.data.data.length);
       if (pegawaiRes) setPegawaiList(pegawaiRes.data.data);
     } catch (err) {
+      if (current !== requestSeq.current) return; // response sudah basi
       await alert(getErrorMessage(err, "Gagal memuat data piket."), {
         title: "Gagal Memuat Data",
         danger: true,
       });
     } finally {
-      setLoading(false);
+      if (current === requestSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    // Microtask: setLoading di dalam loadData tidak boleh jalan sinkron di
+    // badan effect (rule react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tanggal]);
+  }, [tanggal, page, search]);
+
+  // Debounce input pencarian (400ms) sebelum dikirim ke server.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const handlePageChange = (p) => setPage(p);
 
   const openAssign = () => {
     setForm({ userId: "" });
@@ -125,21 +160,51 @@ export default function Piket() {
       <Topbar title="Piket" />
       <div className="p-4 md:p-6">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-5">
-          <div>
+          <div className="w-full sm:w-auto">
             <div className="text-sm font-bold text-gray-600 mb-1.5">
               Jadwal Piket (Sabtu)
             </div>
-            <SaturdayPicker value={tanggal} onChange={setTanggal} />
+            <SaturdayPicker value={tanggal} onChange={(v) => {
+              setTanggal(v);
+              setPage(1); // tanggal baru -> mulai dari halaman pertama
+            }} />
           </div>
-          {isAdmin && (
-            <button
-              onClick={openAssign}
-              className="px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all w-full sm:w-fit"
-              style={{ backgroundColor: "#1a7a1a" }}
-            >
-              <i className="fa-solid fa-user-plus"></i> Assign Piket
-            </button>
-          )}
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            {/* Pencarian nama karyawan (server-side, debounce 400ms) */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-64">
+              <i className="fa-solid fa-magnifying-glass text-gray-500 shrink-0"></i>
+              <input
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Cari nama karyawan..."
+                className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full min-w-0"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput("");
+                    setPage(1);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 shrink-0"
+                >
+                  <i className="fa-solid fa-circle-xmark"></i>
+                </button>
+              )}
+            </div>
+
+            {isAdmin && (
+              <button
+                onClick={openAssign}
+                className="px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all w-full sm:w-fit"
+                style={{ backgroundColor: "#1a7a1a" }}
+              >
+                <i className="fa-solid fa-user-plus"></i> Assign Piket
+              </button>
+            )}
+          </div>
         </div>
 
         {loading ? (
@@ -148,9 +213,15 @@ export default function Piket() {
           </div>
         ) : piket.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
-            <i className="fa-solid fa-broom text-3xl text-gray-300 mb-2"></i>
+            <i
+              className={`fa-solid ${
+                search ? "fa-magnifying-glass" : "fa-broom"
+              } text-3xl text-gray-300 mb-2`}
+            ></i>
             <p className="text-sm font-semibold text-gray-500">
-              Belum ada jadwal piket pada tanggal ini.
+              {search
+                ? `Tidak ada jadwal piket untuk "${search}" pada tanggal ini.`
+                : "Belum ada jadwal piket pada tanggal ini."}
             </p>
           </div>
         ) : (
@@ -207,6 +278,13 @@ export default function Piket() {
                   </div>
                 </div>
               ))}
+
+              <Pagination
+                page={page}
+                limit={PAGE_SIZE}
+                total={total}
+                onPageChange={handlePageChange}
+              />
             </div>
 
             {/* Tampilan tabel - desktop */}
@@ -278,6 +356,13 @@ export default function Piket() {
                 </table>
               </div>
             </div>
+
+            <Pagination
+              page={page}
+              limit={PAGE_SIZE}
+              total={total}
+              onPageChange={handlePageChange}
+            />
           </>
         )}
       </div>

@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
 import ConfirmDeleteModal from "../components/ConfirmDeleteModal";
+import Pagination from "../components/Pagination";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
+
+const PAGE_SIZE = 10;
 
 export default function Pegawai() {
   const { user } = useAuth();
@@ -11,6 +14,11 @@ export default function Pegawai() {
   const isAdmin = user?.role === "admin"; // Pimpinan hanya boleh melihat daftar pegawai
   const [pegawai, setPegawai] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Pagination & pencarian server-side: backend /users sudah mendukung
+  // params `search`, `status`, `page`, `limit` (lihat user.controller.js).
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [form, setForm] = useState({
@@ -22,26 +30,49 @@ export default function Pegawai() {
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  // Nilai mentah dari input; state `search` baru berubah setelah debounce.
+  const [searchInput, setSearchInput] = useState("");
+
+  // Penomoran request: mencegah response lama (mis. karena ganti halaman/
+  // kata kunci cepat) menimpa data yang lebih baru.
+  const requestSeq = useRef(0);
 
   const loadPegawai = async () => {
+    const current = ++requestSeq.current;
     setLoading(true);
     try {
-      const res = await api.get("/users", { params: { limit: 100 } });
+      const res = await api.get("/users", {
+        params: { page, limit: PAGE_SIZE, search: search || undefined },
+      });
+      if (current !== requestSeq.current) return; // response sudah basi
       setPegawai(res.data.data);
+      setTotal(res.data.meta?.total ?? res.data.data.length);
     } catch (err) {
+      if (current !== requestSeq.current) return; // response sudah basi
       await alert(getErrorMessage(err, "Gagal memuat data pegawai."), {
         title: "Gagal Memuat Data",
         danger: true,
       });
     } finally {
-      setLoading(false);
+      if (current === requestSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadPegawai();
+    // Dipanggil lewat microtask (bukan sinkron di badan effect) supaya
+    // setLoading di dalamnya tidak memicu render berantai yang di larang
+    // rule react-hooks/set-state-in-effect.
+    Promise.resolve().then(loadPegawai);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page, search]);
+
+  // Debounce input pencarian: jangan menembak API untuk setiap ketikan.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const handlePageChange = (p) => setPage(p);
 
   const openAdd = () => {
     setEditData(null);
@@ -81,6 +112,7 @@ export default function Pegawai() {
         await api.post("/users", form);
       }
       setShowModal(false);
+      setPage(1); // data baru/kata kunci baru -> kembali ke halaman pertama
       await loadPegawai();
     } catch (err) {
       await alert(getErrorMessage(err, "Gagal menyimpan data pegawai."), {
@@ -124,15 +156,42 @@ export default function Pegawai() {
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
       <Topbar title="Pegawai" />
       <div className="p-4 md:p-6">
-        {isAdmin && (
-          <button
-            onClick={openAdd}
-            className="mb-5 w-full sm:w-auto px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all"
-            style={{ backgroundColor: "#1a7a1a" }}
-          >
-            <i className="fa-solid fa-plus"></i> Tambah Pegawai
-          </button>
-        )}
+        <div className="mb-5 flex flex-col sm:flex-row gap-3">
+          {/* Pencarian server-side (nama / NIP) dengan debounce 400ms */}
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:max-w-xs">
+            <i className="fa-solid fa-magnifying-glass text-gray-500 shrink-0"></i>
+            <input
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                setPage(1); // kata kunci baru -> mulai dari halaman pertama
+              }}
+              placeholder="Cari nama atau NIP..."
+              className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full min-w-0"
+            />
+            {searchInput && (
+              <button
+                onClick={() => {
+                  setSearchInput("");
+                  setPage(1);
+                }}
+                className="text-gray-400 hover:text-gray-600 shrink-0"
+              >
+                <i className="fa-solid fa-circle-xmark"></i>
+              </button>
+            )}
+          </div>
+
+          {isAdmin && (
+            <button
+              onClick={openAdd}
+              className="w-full sm:w-auto sm:ml-auto px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center justify-center gap-2 hover:opacity-90 transition-all"
+              style={{ backgroundColor: "#1a7a1a" }}
+            >
+              <i className="fa-solid fa-plus"></i> Tambah Pegawai
+            </button>
+          )}
+        </div>
 
         {loading ? (
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm font-semibold text-gray-500">
@@ -140,9 +199,15 @@ export default function Pegawai() {
           </div>
         ) : pegawai.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
-            <i className="fa-solid fa-users text-3xl text-gray-300 mb-2"></i>
+            <i
+              className={`fa-solid ${
+                search ? "fa-magnifying-glass" : "fa-users"
+              } text-3xl text-gray-300 mb-2`}
+            ></i>
             <p className="text-sm font-semibold text-gray-500">
-              Belum ada data pegawai.
+              {search
+                ? `Tidak ada pegawai yang cocok dengan "${search}".`
+                : "Belum ada data pegawai."}
             </p>
           </div>
         ) : (
@@ -229,6 +294,13 @@ export default function Pegawai() {
                   )}
                 </div>
               ))}
+
+              <Pagination
+                page={page}
+                limit={PAGE_SIZE}
+                total={total}
+                onPageChange={handlePageChange}
+              />
             </div>
 
             {/* Tampilan tabel - desktop */}
@@ -320,6 +392,13 @@ export default function Pegawai() {
                 </table>
               </div>
             </div>
+
+            <Pagination
+              page={page}
+              limit={PAGE_SIZE}
+              total={total}
+              onPageChange={handlePageChange}
+            />
           </>
         )}
       </div>

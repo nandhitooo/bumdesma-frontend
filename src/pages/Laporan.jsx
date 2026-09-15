@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
 import api, { getErrorMessage } from "../lib/api";
 
@@ -78,20 +78,30 @@ export default function Laporan() {
     [periodType, refDate, month, year],
   );
 
+  // Penomoran request: mencegah response lama (ganti periode cepat)
+  // menimpa data yang lebih baru.
+  const requestSeq = useRef(0);
+
   const loadSummary = async () => {
+    const current = ++requestSeq.current;
     setLoading(true);
     try {
       const res = await api.get("/reports/summary", { params: { start, end } });
+      if (current !== requestSeq.current) return; // response sudah basi
       setRecap(res.data.data.recap);
     } catch (err) {
-      alert(getErrorMessage(err, "Gagal memuat rekap laporan."));
+      if (current === requestSeq.current) {
+        alert(getErrorMessage(err, "Gagal memuat rekap laporan."));
+      }
     } finally {
-      setLoading(false);
+      if (current === requestSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadSummary();
+    // Microtask: setLoading di dalam loadSummary tidak boleh jalan sinkron
+    // di badan effect (rule react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadSummary);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end]);
 

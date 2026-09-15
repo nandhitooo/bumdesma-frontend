@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
+import Pagination from "../components/Pagination";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
+
+const PAGE_SIZE = 10;
 
 function formatJam(dateStr) {
   if (!dateStr) return "-";
@@ -25,6 +28,13 @@ export default function Absensi() {
   const [pegawai, setPegawai] = useState([]);
   const [absensi, setAbsensi] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Pagination server-side untuk daftar pegawai + pencarian nama/NIP.
+  // Catatan absensi per tanggal tetap diambil utuh (max 1 record/karyawan
+  // per hari) supaya penggabungan baris & hitungan "sudah absen" tetap akurat.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editData, setEditData] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -34,29 +44,56 @@ export default function Absensi() {
     status: "alpa",
   });
 
+  // Penomoran request: mencegah response lama (ganti tanggal/halaman cepat)
+  // menimpa data yang lebih baru.
+  const requestSeq = useRef(0);
+
   const loadData = async () => {
+    const current = ++requestSeq.current;
     setLoading(true);
     try {
       const [pegawaiRes, absensiRes] = await Promise.all([
-        api.get("/users", { params: { role: "karyawan", limit: 100 } }),
-        api.get("/attendance", { params: { tanggal } }),
+        api.get("/users", {
+          params: {
+            role: "karyawan",
+            page,
+            limit: PAGE_SIZE,
+            search: search || undefined,
+          },
+        }),
+        // Satu hari maksimal 1 record absensi per karyawan, jadi limit 500
+        // aman untuk mengambil seluruh record tanggal terpilih sekaligus.
+        api.get("/attendance", { params: { tanggal, limit: 500 } }),
       ]);
+      if (current !== requestSeq.current) return; // response sudah basi
       setPegawai(pegawaiRes.data.data);
+      setTotal(pegawaiRes.data.meta?.total ?? pegawaiRes.data.data.length);
       setAbsensi(absensiRes.data.data);
     } catch (err) {
+      if (current !== requestSeq.current) return; // response sudah basi
       await alert(getErrorMessage(err, "Gagal memuat data absensi."), {
         title: "Gagal Memuat Data",
         danger: true,
       });
     } finally {
-      setLoading(false);
+      if (current === requestSeq.current) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    // Microtask: setLoading di dalam loadData tidak boleh jalan sinkron di
+    // badan effect (rule react-hooks/set-state-in-effect).
+    Promise.resolve().then(loadData);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tanggal]);
+  }, [tanggal, page, search]);
+
+  // Debounce input pencarian (400ms) sebelum dikirim ke server.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const handlePageChange = (p) => setPage(p);
 
   // Gabungkan seluruh pegawai dengan data absensinya pada tanggal terpilih.
   // Pegawai yang belum memiliki catatan absensi tetap ditampilkan sebagai
@@ -76,6 +113,15 @@ export default function Absensi() {
   });
 
   const belumAbsenCount = rows.filter((r) => !r.attendanceId).length;
+
+  // Statistik "sudah absen": saat tidak ada filter pencarian, hitung dari
+  // seluruh record absensi hari itu vs total karyawan (bukan hanya halaman
+  // yang tampil). Saat pencarian aktif, hitungan mengikuti baris terfilter.
+  const isFiltering = search.trim().length > 0;
+  const sudahAbsen = isFiltering
+    ? rows.length - belumAbsenCount
+    : absensi.length;
+  const totalKaryawan = isFiltering ? rows.length : total;
 
   const openEdit = (row) => {
     setEditData(row);
@@ -146,23 +192,52 @@ export default function Absensi() {
       <Topbar title="Absensi" />
       <div className="p-4 md:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-5 gap-3">
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-auto">
-            <i className="fa-solid fa-calendar-days text-gray-500 shrink-0"></i>
-            <input
-              type="date"
-              value={tanggal}
-              onChange={(e) => setTanggal(e.target.value)}
-              className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
-            />
+          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-auto">
+              <i className="fa-solid fa-calendar-days text-gray-500 shrink-0"></i>
+              <input
+                type="date"
+                value={tanggal}
+                onChange={(e) => {
+                  setTanggal(e.target.value);
+                  setPage(1); // tanggal baru -> mulai dari halaman pertama
+                }}
+                className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
+              />
+            </div>
+
+            {/* Pencarian server-side (nama / NIP) dengan debounce 400ms */}
+            <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-auto">
+              <i className="fa-solid fa-magnifying-glass text-gray-500 shrink-0"></i>
+              <input
+                value={searchInput}
+                onChange={(e) => {
+                  setSearchInput(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Cari nama atau NIP..."
+                className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
+              />
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput("");
+                    setPage(1);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 shrink-0"
+                >
+                  <i className="fa-solid fa-circle-xmark"></i>
+                </button>
+              )}
+            </div>
           </div>
 
           {!loading && rows.length > 0 && (
             <div className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-xs sm:text-sm font-bold text-gray-700">
-              {rows.length - belumAbsenCount} / {rows.length} karyawan sudah
-              absen
+              {sudahAbsen} / {totalKaryawan} karyawan sudah absen
               {belumAbsenCount > 0 && (
                 <span className="ml-2 text-red-500">
-                  ({belumAbsenCount} belum absen)
+                  ({belumAbsenCount} belum absen di halaman ini)
                 </span>
               )}
             </div>
@@ -175,9 +250,15 @@ export default function Absensi() {
           </div>
         ) : rows.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
-            <i className="fa-solid fa-inbox text-3xl text-gray-300 mb-2"></i>
+            <i
+              className={`fa-solid ${
+                search ? "fa-magnifying-glass" : "fa-inbox"
+              } text-3xl text-gray-300 mb-2`}
+            ></i>
             <p className="text-sm font-semibold text-gray-500">
-              Belum ada data pegawai.
+              {search
+                ? `Tidak ada pegawai yang cocok dengan "${search}".`
+                : "Belum ada data pegawai."}
             </p>
           </div>
         ) : (
@@ -232,6 +313,13 @@ export default function Absensi() {
                   )}
                 </div>
               ))}
+
+              <Pagination
+                page={page}
+                limit={PAGE_SIZE}
+                total={total}
+                onPageChange={handlePageChange}
+              />
             </div>
 
             {/* Tampilan tabel - desktop */}
@@ -299,6 +387,13 @@ export default function Absensi() {
                 </table>
               </div>
             </div>
+
+            <Pagination
+              page={page}
+              limit={PAGE_SIZE}
+              total={total}
+              onPageChange={handlePageChange}
+            />
           </>
         )}
       </div>

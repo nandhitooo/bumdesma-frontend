@@ -329,6 +329,28 @@ function GenerateQrModal({ hasExisting, onClose, onSaved }) {
   );
 }
 
+// Format tanggal ISO (yyyy-mm-dd) ke teks Indonesia, mis. "Sen, 12 Agu 2026".
+function formatTanggal(iso) {
+  if (!iso) return "-";
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("id-ID", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// Jumlah hari kalender dalam rentang libur (inklusif, minimal 1).
+function jumlahHariLibur(mulai, selesai) {
+  const a = new Date(`${mulai}T00:00:00`);
+  const b = new Date(`${selesai}T00:00:00`);
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime()) || b < a)
+    return 1;
+  return Math.round((b - a) / 86400000) + 1;
+}
+
 // Menambahkan/mengedit rentang tanggal hari libur nasional / cuti bersama.
 // Mendukung rentang multi-hari (mis. libur panjang Lebaran) dengan pola
 // input yang sama seperti form Izin/Cuti di app mobile: tanggal mulai +
@@ -452,10 +474,26 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
           />
         </div>
 
-        <p className="text-xs text-gray-400 font-semibold -mt-1">
+        {mulai && selesai && selesai >= mulai && (
+          <div className="rounded-xl bg-green-50 border border-green-100 px-4 py-3 flex items-start gap-3">
+            <i className="fa-solid fa-calendar-check text-green-700 mt-0.5"></i>
+            <div>
+              <div className="text-sm font-extrabold text-green-800">
+                {mulai === selesai
+                  ? formatTanggal(mulai)
+                  : `${formatTanggal(mulai)} — ${formatTanggal(selesai)}`}
+              </div>
+              <div className="text-xs font-semibold text-green-600 mt-0.5">
+                {jumlahHariLibur(mulai, selesai)} hari libur · karyawan tidak
+                dapat absensi pada rentang ini
+              </div>
+            </div>
+          </div>
+        )}
+
+        <p className="text-xs text-gray-400 font-semibold">
           Untuk hari libur satu hari, isi tanggal mulai dan tanggal selesai
-          dengan tanggal yang sama. Karyawan tidak dapat melakukan absensi pada
-          rentang tanggal ini.
+          dengan tanggal yang sama.
         </p>
       </div>
     </ModalWrapper>
@@ -499,7 +537,7 @@ export default function Pengaturan() {
     try {
       const res = await api.get("/settings/qr-code");
       setQr(res.data.data);
-    } catch (err) {
+    } catch {
       // Belum pernah generate -> backend membalas 404, itu kondisi normal di sini.
       setQr(null);
     } finally {
@@ -508,8 +546,12 @@ export default function Pengaturan() {
   };
 
   useEffect(() => {
-    loadSettings();
-    loadQr();
+    // Microtask: setLoading/setQrLoading di dalam loader tidak boleh jalan
+    // sinkron di badan effect (rule react-hooks/set-state-in-effect).
+    Promise.resolve().then(() => {
+      loadSettings();
+      loadQr();
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -857,6 +899,11 @@ export default function Pengaturan() {
                 <div className="flex items-center gap-2 text-gray-700 font-extrabold">
                   <i className="fa-solid fa-calendar-day text-green-700"></i>{" "}
                   Hari Libur Nasional
+                  {holidays.length > 0 && (
+                    <span className="text-xs font-extrabold bg-green-100 text-green-700 rounded-full px-2 py-0.5">
+                      {holidays.length}
+                    </span>
+                  )}
                 </div>
                 {isAdmin && (
                   <button
@@ -891,54 +938,126 @@ export default function Pengaturan() {
               </div>
 
               {filteredHolidays.length === 0 ? (
-                <p className="text-sm text-gray-500 font-semibold">
-                  {holidayFilterMonth
-                    ? "Tidak ada hari libur pada bulan ini."
-                    : "Belum ada hari libur yang ditetapkan."}
-                </p>
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+                    <i className="fa-solid fa-umbrella-beach text-gray-400"></i>
+                  </div>
+                  <p className="text-sm font-bold text-gray-500">
+                    {holidayFilterMonth
+                      ? "Tidak ada hari libur pada bulan ini."
+                      : "Belum ada hari libur yang ditetapkan."}
+                  </p>
+                  <p className="text-xs text-gray-400 font-semibold mt-1">
+                    {holidayFilterMonth
+                      ? "Coba pilih bulan lain atau reset filter."
+                      : isAdmin
+                        ? 'Klik "Tambah Hari Libur" untuk menetapkan tanggal libur.'
+                        : "Hari libur akan tampil di sini setelah ditetapkan admin."}
+                  </p>
+                </div>
               ) : (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2.5">
                   {filteredHolidays.map((h, i) => {
                     const isSingleDay = h.tanggal_mulai === h.tanggal_selesai;
                     // Hari libur yang tanggal selesainya sudah lewat tidak
                     // lagi bisa diedit/dihapus - hanya ditampilkan sebagai
                     // riwayat.
                     const isUpcoming = h.tanggal_selesai >= today;
+                    const isOngoing = isUpcoming && h.tanggal_mulai <= today;
+
+                    // Status tampil: berlangsung (hari ini libur), akan
+                    // datang, atau sudah selesai (riwayat).
+                    const statusLabel = isOngoing
+                      ? "Berlangsung"
+                      : isUpcoming
+                        ? "Akan Datang"
+                        : "Selesai";
+                    const statusClass = isOngoing
+                      ? "bg-green-600 text-white"
+                      : isUpcoming
+                        ? "bg-green-50 text-green-700 border border-green-200"
+                        : "bg-gray-100 text-gray-400";
+
+                    // Badge tanggal: angka hari + singkatan bulan dari
+                    // tanggal mulai, abu-abu kalau sudah jadi riwayat.
+                    const mulaiDate = new Date(`${h.tanggal_mulai}T00:00:00`);
+                    const dayNumber = Number.isNaN(mulaiDate.getTime())
+                      ? "-"
+                      : mulaiDate.getDate();
+                    const monthShort = Number.isNaN(mulaiDate.getTime())
+                      ? ""
+                      : mulaiDate.toLocaleDateString("id-ID", {
+                          month: "short",
+                        });
+
+                    const rentangTeks = isSingleDay
+                      ? formatTanggal(h.tanggal_mulai)
+                      : `${formatTanggal(h.tanggal_mulai)} — ${formatTanggal(h.tanggal_selesai)}`;
+
                     return (
                       <div
                         key={`${h.tanggal_mulai}-${h.tanggal_selesai}-${i}`}
-                        className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-gray-50 flex-wrap"
+                        className={`flex items-center gap-4 px-4 py-3 rounded-xl border border-gray-100 bg-gray-50 transition-colors flex-wrap ${
+                          isUpcoming
+                            ? "hover:border-green-200 hover:bg-green-50/50"
+                            : "opacity-75"
+                        }`}
                       >
-                        <div>
-                          <div className="text-sm font-extrabold text-gray-800">
-                            {isSingleDay
-                              ? h.tanggal_mulai
-                              : `${h.tanggal_mulai}  —  ${h.tanggal_selesai}`}
-                            {!isUpcoming && (
-                              <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gray-200 text-gray-500">
-                                Selesai
-                              </span>
-                            )}
-                          </div>
-                          {h.keterangan && (
-                            <div className="text-xs font-semibold text-gray-500 mt-0.5">
-                              {h.keterangan}
-                            </div>
-                          )}
+                        <div
+                          className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl shrink-0 ${
+                            isUpcoming ? "bg-green-100" : "bg-gray-200/70"
+                          }`}
+                        >
+                          <span
+                            className={`text-[10px] font-extrabold uppercase ${
+                              isUpcoming ? "text-green-700" : "text-gray-400"
+                            }`}
+                          >
+                            {monthShort}
+                          </span>
+                          <span
+                            className={`text-xl font-extrabold leading-none ${
+                              isUpcoming ? "text-green-800" : "text-gray-500"
+                            }`}
+                          >
+                            {dayNumber}
+                          </span>
                         </div>
+
+                        <div className="flex-1 min-w-[180px]">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-extrabold text-gray-800">
+                              {h.keterangan || "Hari Libur"}
+                            </span>
+                            <span
+                              className={`text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-lg ${statusClass}`}
+                            >
+                              {statusLabel}
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold text-gray-500 mt-0.5">
+                            {rentangTeks} ·{" "}
+                            {jumlahHariLibur(
+                              h.tanggal_mulai,
+                              h.tanggal_selesai,
+                            )}{" "}
+                            hari
+                          </div>
+                        </div>
+
                         {isAdmin && isUpcoming && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => openHolidayModal(h)}
-                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 transition-all flex items-center gap-1"
                             >
-                              edit
+                              <i className="fa-solid fa-pen"></i> edit
                             </button>
                             <button
                               onClick={() => handleDeleteHoliday(h)}
-                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all flex items-center gap-1"
                             >
-                              hapus
+                              <i className="fa-solid fa-trash"></i> hapus
                             </button>
                           </div>
                         )}

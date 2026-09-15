@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import api, { getErrorMessage } from "../lib/api";
 
 const AuthContext = createContext(null);
@@ -31,6 +31,17 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("user");
     setUser(null);
   };
+
+  // Event "auth:session-expired" dikirim dari interceptor di src/lib/api.js
+  // saat refresh token gagal (sesi benar-benar kedaluwarsa). Dengarkan di
+  // sini supaya state `user` di React ikut di-reset dan UI kembali ke
+  // halaman login tanpa perlu reload halaman.
+  useEffect(() => {
+    const handleSessionExpired = () => setUser(null);
+    window.addEventListener("auth:session-expired", handleSessionExpired);
+    return () =>
+      window.removeEventListener("auth:session-expired", handleSessionExpired);
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
