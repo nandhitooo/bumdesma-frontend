@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import Topbar from "../components/Topbar";
+import {
+  IndonesianDatePicker,
+  IndonesianMonthPicker,
+} from "../components/IndonesianDatePickers";
+import AktivitasLogCard from "../components/AktivitasLogCard";
+import BackupCard from "../components/BackupCard";
 import api, { getErrorMessage, FILE_BASE_URL } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
@@ -289,6 +295,78 @@ function PasswordModal({ onClose }) {
   );
 }
 
+// Ganti username login untuk Admin/Pimpinan. Wajib konfirmasi password;
+// sukses -> user di AuthContext & localStorage di-refresh dengan username
+// baru (dipakai ulang oleh Sidebar/Topbar).
+function UpdateUsernameModal({ onClose }) {
+  const { alert } = useModal();
+  const { user, setUser } = useAuth();
+  const [form, setForm] = useState({ username: "", password: "" });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!form.username.trim()) {
+      await alert("Username baru wajib diisi.", {
+        title: "Data Belum Lengkap",
+      });
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.post("/auth/change-username", {
+        newUsername: form.username.trim(),
+        password: form.password,
+      });
+      const nextUser = { ...user, username: res.data.data.username };
+      localStorage.setItem("user", JSON.stringify(nextUser));
+      setUser(nextUser);
+      await alert("Username berhasil diganti.", { title: "Berhasil" });
+      onClose();
+    } catch (err) {
+      await alert(getErrorMessage(err, "Gagal mengganti username."), {
+        title: "Gagal Mengganti Username",
+        danger: true,
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalWrapper
+      title="Ganti Username"
+      onClose={onClose}
+      onSave={handleSave}
+      saving={saving}
+    >
+      <div className="flex flex-col gap-3">
+        <input
+          value={user?.username ?? ""}
+          disabled
+          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-100 text-gray-400 outline-none"
+        />
+        <input
+          placeholder="Username Baru"
+          value={form.username}
+          onChange={(e) => setForm({ ...form, username: e.target.value })}
+          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+        />
+        <input
+          type="password"
+          placeholder="Konfirmasi Password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+        />
+        <p className="text-xs text-gray-400 font-semibold">
+          Username 4-50 karakter, hanya huruf, angka, titik, garis bawah, dan
+          tanda hubung.
+        </p>
+      </div>
+    </ModalWrapper>
+  );
+}
+
 // Generate/regenerasi QR Code statis. Sesuai alur di laporan: Admin
 // men-generate satu kali lewat halaman Pengaturan, QR Code lama otomatis
 // dinonaktifkan setiap kali regenerasi dilakukan.
@@ -360,7 +438,7 @@ function jumlahHariLibur(mulai, selesai) {
 //
 // [editData] diisi kalau modal dibuka untuk mengedit entri yang sudah ada
 // (null berarti mode tambah baru).
-function HariLiburModal({ existing, editData, onClose, onSaved }) {
+function HariLiburModal({ existing, editData, editIndex, onClose, onSaved }) {
   const { alert } = useModal();
   const isEdit = !!editData;
   const [mulai, setMulai] = useState(editData?.tanggal_mulai || "");
@@ -382,10 +460,12 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
       return;
     }
 
-    // Cegah rentang tanggal yang bertumpuk dengan entri hari libur lain
-    // (kecuali dengan dirinya sendiri saat mode edit).
-    const overlaps = existing.some((h) => {
-      if (isEdit && h === editData) return false;
+    // Cegah rentang tanggal yang bertumpuk dengan entri hari libur lain.
+    // Saat mode edit, entri yang sedang diedit dikecualikan lewat index-nya
+    // (bukan perbandingan referensi object, karena getHolidays() membuat
+    // object baru setiap render sehingga h === editData selalu false).
+    const overlaps = existing.some((h, idx) => {
+      if (isEdit && idx === editIndex) return false;
       return mulai <= h.tanggal_selesai && selesai >= h.tanggal_mulai;
     });
     if (overlaps) {
@@ -405,7 +485,7 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
       };
       let next;
       if (isEdit) {
-        next = existing.map((h) => (h === editData ? entry : h));
+        next = existing.map((h, idx) => (idx === editIndex ? entry : h));
       } else {
         next = [...existing, entry];
       }
@@ -435,29 +515,24 @@ function HariLiburModal({ existing, editData, onClose, onSaved }) {
             <label className="text-xs font-bold text-gray-500 mb-1 block">
               Tanggal Mulai
             </label>
-            <input
-              type="date"
+            <IndonesianDatePicker
               value={mulai}
-              onChange={(e) => {
-                const val = e.target.value;
+              onChange={(val) => {
                 setMulai(val);
                 // Jaga agar tanggal selesai tidak pernah lebih awal dari
                 // tanggal mulai yang baru dipilih.
                 if (!selesai || selesai < val) setSelesai(val);
               }}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
             />
           </div>
           <div>
             <label className="text-xs font-bold text-gray-500 mb-1 block">
               Tanggal Selesai
             </label>
-            <input
-              type="date"
+            <IndonesianDatePicker
               value={selesai}
-              min={mulai || undefined}
-              onChange={(e) => setSelesai(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+              minISO={mulai || undefined}
+              onChange={setSelesai}
             />
           </div>
         </div>
@@ -510,10 +585,14 @@ export default function Pengaturan() {
   const [qr, setQr] = useState(null);
   const [qrLoading, setQrLoading] = useState(true);
 
-  // Filter bulan untuk daftar Hari Libur Nasional, dan entri yang sedang
-  // diedit (null = modal tambah baru).
+  // Filter bulan, tahun & status untuk daftar Hari Libur Nasional, dan
+  // index entri yang sedang diedit di array holidays (null = modal tambah
+  // baru). Index dipakai, bukan referensi object, karena getHolidays()
+  // membuat object baru setiap render.
   const [holidayFilterMonth, setHolidayFilterMonth] = useState("");
-  const [editingHoliday, setEditingHoliday] = useState(null);
+  const [holidayFilterYear, setHolidayFilterYear] = useState("");
+  const [holidayFilterStatus, setHolidayFilterStatus] = useState("semua");
+  const [editingHolidayIndex, setEditingHolidayIndex] = useState(null);
 
   const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -588,7 +667,7 @@ export default function Pengaturan() {
 
   const close = () => {
     setActiveModal(null);
-    setEditingHoliday(null);
+    setEditingHolidayIndex(null);
   };
   const saved = () => {
     close();
@@ -597,7 +676,9 @@ export default function Pengaturan() {
   };
 
   const openHolidayModal = (holiday = null) => {
-    setEditingHoliday(holiday);
+    // Simpan index di array holidays, bukan object-nya. Object dari
+    // getHolidays() dibuat ulang tiap render sehingga referensi tidak stabil.
+    setEditingHolidayIndex(holiday ? holidays.indexOf(holiday) : null);
     setActiveModal("hari-libur");
   };
 
@@ -613,7 +694,8 @@ export default function Pengaturan() {
     });
     if (!confirmed) return;
     try {
-      const next = holidays.filter((h) => h !== holiday);
+      const idx = holidays.indexOf(holiday);
+      const next = holidays.filter((_, i) => i !== idx);
       await api.put("/settings", { national_holidays: next });
       await loadSettings();
     } catch (err) {
@@ -691,22 +773,55 @@ export default function Pengaturan() {
       label: "Ganti Password",
       adminOnly: false,
     },
+    {
+      id: "username",
+      icon: "fa-user-pen",
+      label: "Ganti Username",
+      adminOnly: false,
+    },
   ];
   const cards = allCards.filter((c) => isAdmin || !c.adminOnly);
 
-  // Daftar hari libur yang sudah difilter berdasarkan bulan terpilih
-  // (kalau ada), diurutkan berdasarkan tanggal mulai.
+  const today = todayISO();
+
+  // Tahun-tahun yang tersedia untuk dropdown filter, diambil dari tanggal
+  // mulai/selesai seluruh entri libur (selalu terurut menaik, unik).
+  const holidayYears = Array.from(
+    new Set(
+      holidays.flatMap((h) =>
+        [h.tanggal_mulai?.slice(0, 4), h.tanggal_selesai?.slice(0, 4)].filter(
+          Boolean,
+        ),
+      ),
+    ),
+  ).sort();
+
+  // Daftar hari libur yang sudah difilter berdasarkan bulan/tahun terpilih
+  // (kalau ada) dan status (semua / akan datang / selesai), diurutkan
+  // berdasarkan tanggal mulai. Entri berlangsung dihitung masuk "akan datang".
   const filteredHolidays = holidays
     .filter((h) => {
+      // Filter tahun: rentang libur menyentuh tahun terpilih.
+      if (holidayFilterYear) {
+        const yearStart = `${holidayFilterYear}-01-01`;
+        const yearEnd = `${holidayFilterYear}-12-31`;
+        if (h.tanggal_selesai < yearStart || h.tanggal_mulai > yearEnd)
+          return false;
+      }
+      // Filter bulan: rentang libur menyentuh bulan terpilih.
       if (!holidayFilterMonth) return true;
       const [fy, fm] = holidayFilterMonth.split("-");
       const monthStart = `${fy}-${fm}-01`;
       const monthEnd = `${fy}-${fm}-31`;
       return h.tanggal_mulai <= monthEnd && h.tanggal_selesai >= monthStart;
     })
+    .filter((h) => {
+      if (holidayFilterStatus === "semua") return true;
+      const selesai = h.tanggal_selesai >= today;
+      if (holidayFilterStatus === "akan-datang") return selesai;
+      return !selesai; // "selesai"
+    })
     .sort((a, b) => a.tanggal_mulai.localeCompare(b.tanggal_mulai));
-
-  const today = todayISO();
 
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
@@ -916,20 +1031,53 @@ export default function Pengaturan() {
                 )}
               </div>
 
-              {/* Filter bulan */}
+              {/* Filter bulan & status */}
               <div className="flex items-center gap-2 mb-4 flex-wrap">
                 <label className="text-xs font-bold text-gray-500">
                   Filter Bulan:
                 </label>
-                <input
-                  type="month"
-                  value={holidayFilterMonth}
-                  onChange={(e) => setHolidayFilterMonth(e.target.value)}
+                <div className="w-44">
+                  <IndonesianMonthPicker
+                    value={holidayFilterMonth}
+                    onChange={setHolidayFilterMonth}
+                  />
+                </div>
+                <label className="text-xs font-bold text-gray-500">
+                  Filter Tahun:
+                </label>
+                <select
+                  value={holidayFilterYear}
+                  onChange={(e) => setHolidayFilterYear(e.target.value)}
                   className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
-                />
-                {holidayFilterMonth && (
+                >
+                  <option value="">Semua Tahun</option>
+                  {holidayYears.map((y) => (
+                    <option key={y} value={y}>
+                      {y}
+                    </option>
+                  ))}
+                </select>
+                <label className="text-xs font-bold text-gray-500 ml-2">
+                  Status:
+                </label>
+                <select
+                  value={holidayFilterStatus}
+                  onChange={(e) => setHolidayFilterStatus(e.target.value)}
+                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-green-400"
+                >
+                  <option value="semua">Semua</option>
+                  <option value="akan-datang">Akan Datang</option>
+                  <option value="selesai">Selesai</option>
+                </select>
+                {(holidayFilterMonth ||
+                  holidayFilterYear ||
+                  holidayFilterStatus !== "semua") && (
                   <button
-                    onClick={() => setHolidayFilterMonth("")}
+                    onClick={() => {
+                      setHolidayFilterMonth("");
+                      setHolidayFilterYear("");
+                      setHolidayFilterStatus("semua");
+                    }}
                     className="text-xs font-bold text-gray-400 hover:text-gray-600"
                   >
                     Reset
@@ -943,13 +1091,17 @@ export default function Pengaturan() {
                     <i className="fa-solid fa-umbrella-beach text-gray-400"></i>
                   </div>
                   <p className="text-sm font-bold text-gray-500">
-                    {holidayFilterMonth
-                      ? "Tidak ada hari libur pada bulan ini."
+                    {holidayFilterMonth ||
+                    holidayFilterYear ||
+                    holidayFilterStatus !== "semua"
+                      ? "Tidak ada hari libur yang cocok dengan filter."
                       : "Belum ada hari libur yang ditetapkan."}
                   </p>
                   <p className="text-xs text-gray-400 font-semibold mt-1">
-                    {holidayFilterMonth
-                      ? "Coba pilih bulan lain atau reset filter."
+                    {holidayFilterMonth ||
+                    holidayFilterYear ||
+                    holidayFilterStatus !== "semua"
+                      ? "Coba ubah bulan/tahun/status atau reset filter."
                       : isAdmin
                         ? 'Klik "Tambah Hari Libur" untuk menetapkan tanggal libur.'
                         : "Hari libur akan tampil di sini setelah ditetapkan admin."}
@@ -1075,6 +1227,16 @@ export default function Pengaturan() {
           </div>
         )}
 
+        {/* Backup data sistem (admin saja) */}
+        <div className="mb-4">
+          <BackupCard />
+        </div>
+
+        {/* Log aktivitas sistem (admin saja, expand/collapse) */}
+        <div className="mb-8">
+          <AktivitasLogCard />
+        </div>
+
         <h2 className="text-lg font-extrabold text-gray-800 mb-4">
           Ubah Pengaturan
         </h2>
@@ -1102,13 +1264,21 @@ export default function Pengaturan() {
         <RadiusModal settings={settings} onClose={close} onSaved={saved} />
       )}
       {activeModal === "password" && <PasswordModal onClose={close} />}
+      {activeModal === "username" && (
+        <UpdateUsernameModal onClose={close} />
+      )}
       {activeModal === "qr" && (
         <GenerateQrModal hasExisting={!!qr} onClose={close} onSaved={saved} />
       )}
       {activeModal === "hari-libur" && (
         <HariLiburModal
           existing={holidays}
-          editData={editingHoliday}
+          editData={
+            editingHolidayIndex !== null
+              ? holidays[editingHolidayIndex]
+              : null
+          }
+          editIndex={editingHolidayIndex}
           onClose={close}
           onSaved={saved}
         />

@@ -1,4 +1,4 @@
-import PodoRukunLogo from "../assets/podo-rukun.png";
+import PodoRukunLogo from "../assets/podo-rukun.webp";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
 

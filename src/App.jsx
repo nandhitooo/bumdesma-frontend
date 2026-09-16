@@ -1,14 +1,27 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Pegawai from "./pages/Pegawai";
-import Absensi from "./pages/Absensi";
-import Piket from "./pages/Piket";
-import Cuti from "./pages/Cuti";
-import Laporan from "./pages/Laporan";
-import Pengaturan from "./pages/Pengaturan";
 import Sidebar from "./components/Sidebar";
 import { useAuth } from "./context/AuthContext";
+
+// Code-splitting: tiap halaman jadi chunk terpisah, dimuat saat dipakai.
+// Login tetap eager supaya layar pertama tidak menunggu chunk lain.
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Pegawai = lazy(() => import("./pages/Pegawai"));
+const Absensi = lazy(() => import("./pages/Absensi"));
+const Piket = lazy(() => import("./pages/Piket"));
+const Cuti = lazy(() => import("./pages/Cuti"));
+const Laporan = lazy(() => import("./pages/Laporan"));
+const Pengaturan = lazy(() => import("./pages/Pengaturan"));
+
+function PageFallback() {
+  return (
+    <div className="flex-1 flex items-center justify-center bg-gray-100 min-h-screen">
+      <span className="text-sm font-semibold text-gray-500">
+        Memuat halaman...
+      </span>
+    </div>
+  );
+}
 
 export default function App() {
   const { user } = useAuth();
@@ -71,7 +84,7 @@ export default function App() {
             <span className="text-lg font-bold text-green-700">BUMDESMA</span>
           </div>
         </div>
-        {renderPage()}
+        <Suspense fallback={<PageFallback />}>{renderPage()}</Suspense>
       </div>
     </div>
   );

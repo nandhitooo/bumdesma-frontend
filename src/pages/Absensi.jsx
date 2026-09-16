@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
+import { IndonesianDatePicker } from "../components/IndonesianDatePickers";
 import Pagination from "../components/Pagination";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
@@ -195,14 +196,12 @@ export default function Absensi() {
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-auto">
               <i className="fa-solid fa-calendar-days text-gray-500 shrink-0"></i>
-              <input
-                type="date"
+              <IndonesianDatePicker
                 value={tanggal}
-                onChange={(e) => {
-                  setTanggal(e.target.value);
+                onChange={(val) => {
+                  setTanggal(val);
                   setPage(1); // tanggal baru -> mulai dari halaman pertama
                 }}
-                className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
               />
             </div>
 

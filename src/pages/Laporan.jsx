@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
+import {
+  IndonesianDatePicker,
+  IndonesianMonthPicker,
+} from "../components/IndonesianDatePickers";
 import api, { getErrorMessage } from "../lib/api";
 
 const PERIOD_TYPES = [
@@ -172,20 +176,13 @@ export default function Laporan() {
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 w-full sm:w-auto">
                 <i className="fa-solid fa-calendar-days text-gray-400 shrink-0"></i>
                 {(periodType === "harian" || periodType === "mingguan") && (
-                  <input
-                    type="date"
+                  <IndonesianDatePicker
                     value={refDate}
-                    onChange={(e) => setRefDate(e.target.value)}
-                    className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
+                    onChange={setRefDate}
                   />
                 )}
                 {periodType === "bulanan" && (
-                  <input
-                    type="month"
-                    value={month}
-                    onChange={(e) => setMonth(e.target.value)}
-                    className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full sm:w-auto min-w-0"
-                  />
+                  <IndonesianMonthPicker value={month} onChange={setMonth} />
                 )}
                 {periodType === "tahunan" && (
                   <select
