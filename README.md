@@ -1,7 +1,7 @@
 # 🏢 BUMDESMA — Sistem Absensi (Website Admin & Pimpinan)
 
 Aplikasi web untuk Admin & Pimpinan BUMDESMA (Badan Usaha Milik Desa
-Bersama) mengelola absensi karyawan. Dibangun dengan **React + Vite +
+Bersama) mengelola absensi pegawai. Dibangun dengan **React + Vite +
 Tailwind CSS**, terhubung ke REST API `bumdesma-backend`.
 
 ---
@@ -22,14 +22,14 @@ Tailwind CSS**, terhubung ke REST API `bumdesma-backend`.
 | ------------- | ----------------------------------------------------------------- |
 | 🔐 Login      | Autentikasi Admin/Pimpinan (**username** + password)              |
 | 📊 Dashboard  | Statistik kehadiran & grafik mingguan                             |
-| 👥 Pegawai    | Manajemen data karyawan (CRUD, tabel `users`)                     |
+| 👥 Pegawai    | Manajemen data pegawai (CRUD, tabel `users`)                     |
 | 📋 Absensi    | Rekap & koreksi manual data absensi harian                        |
-| 🧹 Piket      | Penjadwalan piket + tombol **Kirim Notifikasi** ke app mobile karyawan |
+| 🧹 Piket      | Penjadwalan piket + tombol **Kirim Notifikasi** ke app mobile pegawai |
 | 📅 Izin/Cuti  | Peninjauan (Admin) & keputusan akhir (Pimpinan) atas pengajuan    |
 | 📈 Laporan    | Ringkasan kehadiran, izin, dan alpa; export PDF/Spreadsheet        |
 | ⚙️ Pengaturan | Jam kerja, lokasi kantor, hari libur, ganti password              |
 
-> Karyawan **tidak** login lewat website ini — mereka pakai app mobile
+> Pegawai **tidak** login lewat website ini — mereka pakai app mobile
 > (NIP + password). Website ini khusus untuk Admin & Pimpinan.
 
 ---
@@ -74,7 +74,7 @@ src/
 ├── pages/
 │   ├── Login.jsx          # Login username + password (admin-login)
 │   ├── Dashboard.jsx
-│   ├── Pegawai.jsx        # CRUD karyawan (tabel users, tanpa role/departemen)
+│   ├── Pegawai.jsx        # CRUD pegawai (tabel users, tanpa role/departemen)
 │   ├── Absensi.jsx
 │   ├── Piket.jsx          # Assign piket + tombol Kirim Notifikasi
 │   ├── Cuti.jsx
@@ -90,7 +90,7 @@ src/
 ## 🔐 Login
 
 Login memakai **username + password** ke `POST /api/auth/admin-login`
-(bukan NIP — NIP dipakai khusus login karyawan di app mobile). Akun
+(bukan NIP — NIP dipakai khusus login pegawai di app mobile). Akun
 tersimpan di tabel `admin_accounts` pada backend, dibedakan lewat kolom
 `role` (`admin` / `pimpinan`); sidebar & hak akses menyesuaikan role akun
 yang login.
@@ -107,12 +107,12 @@ yang login.
 ## 🧹 Fitur Notifikasi Piket
 
 Alur di halaman **Piket**:
-1. Admin assign piket ke karyawan seperti biasa (tombol **Assign Piket**).
+1. Admin assign piket ke pegawai seperti biasa (tombol **Assign Piket**).
 2. Baris jadwal piket baru muncul dengan status **belum terkirim** (tombol
    biru **"Kirim Notifikasi"**).
-3. Admin klik tombol itu → backend membuat notifikasi in-app untuk karyawan
+3. Admin klik tombol itu → backend membuat notifikasi in-app untuk pegawai
    bersangkutan → status berubah jadi badge hijau **"Terkirim"**.
-4. Karyawan melihat badge merah di lonceng Dashboard app mobile begitu
+4. Pegawai melihat badge merah di lonceng Dashboard app mobile begitu
    notifikasi terkirim.
 
 ---

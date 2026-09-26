@@ -28,7 +28,7 @@ export default function Piket() {
   const [loading, setLoading] = useState(true);
   // Pagination & pencarian server-side pada endpoint /piket (params
   // `search`, `page`, `limit` - lihat piket.controller.js). Dropdown assign
-  // tetap memuat semua karyawan aktif terpisah dari pencarian tabel.
+  // tetap memuat semua pegawai aktif terpisah dari pencarian tabel.
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [searchInput, setSearchInput] = useState("");
@@ -57,7 +57,7 @@ export default function Piket() {
       ];
       if (isAdmin) {
         requests.push(
-          api.get("/users", { params: { role: "karyawan", limit: 100 } }),
+          api.get("/users", { params: { role: "pegawai", limit: 100 } }),
         );
       }
       const [piketRes, pegawaiRes] = await Promise.all(requests);
@@ -170,7 +170,7 @@ export default function Piket() {
             }} />
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            {/* Pencarian nama karyawan (server-side, debounce 400ms) */}
+            {/* Pencarian nama pegawai (server-side, debounce 400ms) */}
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-64">
               <i className="fa-solid fa-magnifying-glass text-gray-500 shrink-0"></i>
               <input
@@ -179,7 +179,7 @@ export default function Piket() {
                   setSearchInput(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Cari nama karyawan..."
+                placeholder="Cari nama pegawai..."
                 className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full min-w-0"
               />
               {searchInput && (

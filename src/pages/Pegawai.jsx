@@ -441,7 +441,7 @@ export default function Pegawai() {
                     }
                   />
                   <p className="text-xs text-gray-400 font-semibold -mt-1">
-                    Karyawan akan diminta mengisi email pemulihan sendiri saat
+                    Pegawai akan diminta mengisi email pemulihan sendiri saat
                     pertama kali login.
                   </p>
                 </>

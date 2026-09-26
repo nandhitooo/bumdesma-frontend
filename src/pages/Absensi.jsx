@@ -30,7 +30,7 @@ export default function Absensi() {
   const [absensi, setAbsensi] = useState([]);
   const [loading, setLoading] = useState(true);
   // Pagination server-side untuk daftar pegawai + pencarian nama/NIP.
-  // Catatan absensi per tanggal tetap diambil utuh (max 1 record/karyawan
+  // Catatan absensi per tanggal tetap diambil utuh (max 1 record/pegawai
   // per hari) supaya penggabungan baris & hitungan "sudah absen" tetap akurat.
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -56,13 +56,13 @@ export default function Absensi() {
       const [pegawaiRes, absensiRes] = await Promise.all([
         api.get("/users", {
           params: {
-            role: "karyawan",
+            role: "pegawai",
             page,
             limit: PAGE_SIZE,
             search: search || undefined,
           },
         }),
-        // Satu hari maksimal 1 record absensi per karyawan, jadi limit 500
+        // Satu hari maksimal 1 record absensi per pegawai, jadi limit 500
         // aman untuk mengambil seluruh record tanggal terpilih sekaligus.
         api.get("/attendance", { params: { tanggal, limit: 500 } }),
       ]);
@@ -116,13 +116,13 @@ export default function Absensi() {
   const belumAbsenCount = rows.filter((r) => !r.attendanceId).length;
 
   // Statistik "sudah absen": saat tidak ada filter pencarian, hitung dari
-  // seluruh record absensi hari itu vs total karyawan (bukan hanya halaman
+  // seluruh record absensi hari itu vs total pegawai (bukan hanya halaman
   // yang tampil). Saat pencarian aktif, hitungan mengikuti baris terfilter.
   const isFiltering = search.trim().length > 0;
   const sudahAbsen = isFiltering
     ? rows.length - belumAbsenCount
     : absensi.length;
-  const totalKaryawan = isFiltering ? rows.length : total;
+  const totalPegawai = isFiltering ? rows.length : total;
 
   const openEdit = (row) => {
     setEditData(row);
@@ -233,7 +233,7 @@ export default function Absensi() {
 
           {!loading && rows.length > 0 && (
             <div className="px-4 py-2.5 rounded-xl bg-white border border-gray-200 shadow-sm text-xs sm:text-sm font-bold text-gray-700">
-              {sudahAbsen} / {totalKaryawan} karyawan sudah absen
+              {sudahAbsen} / {totalPegawai} pegawai sudah absen
               {belumAbsenCount > 0 && (
                 <span className="ml-2 text-red-500">
                   ({belumAbsenCount} belum absen di halaman ini)
@@ -405,7 +405,7 @@ export default function Absensi() {
             </h2>
             {!editData?.attendanceId && (
               <p className="text-xs font-semibold text-gray-400 mb-3">
-                Karyawan ini belum memiliki catatan absensi pada tanggal ini.
+                Pegawai ini belum memiliki catatan absensi pada tanggal ini.
                 Menyimpan akan membuat data absensi baru.
               </p>
             )}

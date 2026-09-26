@@ -19,10 +19,10 @@ const ACTION_LABELS = {
   UPDATE_EMAIL: "Perbarui Email",
   FORGOT_PASSWORD: "Lupa Password",
   RESET_PASSWORD: "Reset Password",
-  CREATE_USER: "Tambah Karyawan",
-  UPDATE_USER: "Ubah Karyawan",
-  SET_USER_STATUS: "Ubah Status Karyawan",
-  DELETE_USER: "Hapus Karyawan",
+  CREATE_USER: "Tambah Pegawai",
+  UPDATE_USER: "Ubah Pegawai",
+  SET_USER_STATUS: "Ubah Status Pegawai",
+  DELETE_USER: "Hapus Pegawai",
   CREATE_ADMIN_ACCOUNT: "Tambah Akun Admin",
   UPDATE_ADMIN_ACCOUNT: "Ubah Akun Admin",
   SET_ADMIN_ACCOUNT_STATUS: "Ubah Status Akun Admin",
@@ -292,7 +292,7 @@ export default function AktivitasLogCard() {
                       const peran =
                         log.actor_type ||
                         log.adminAccount?.role ||
-                        (log.user ? "karyawan" : "");
+                        (log.user ? "pegawai" : "");
                       return (
                         <tr
                           key={log.id}

@@ -50,8 +50,8 @@ export default function Dashboard() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <StatCard
-                label="Total Karyawan"
-                value={summary.totalKaryawan}
+                label="Total Pegawai"
+                value={summary.totalPegawai}
                 color="bg-blue-500"
               />
               <StatCard

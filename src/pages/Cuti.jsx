@@ -200,7 +200,7 @@ export default function Cuti() {
                   setSearchInput(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Cari nama karyawan..."
+                placeholder="Cari nama pegawai..."
                 className="outline-none text-sm font-semibold text-gray-700 bg-transparent w-full min-w-0"
               />
               {searchInput && (

@@ -434,7 +434,7 @@ function jumlahHariLibur(mulai, selesai) {
 // input yang sama seperti form Izin/Cuti di app mobile: tanggal mulai +
 // tanggal selesai, plus keterangan bebas untuk menjelaskan hari libur
 // tersebut. Tanggal yang masuk rentang ini akan otomatis menutup akses
-// scanning karyawan.
+// scanning pegawai.
 //
 // [editData] diisi kalau modal dibuka untuk mengedit entri yang sudah ada
 // (null berarti mode tambah baru).
@@ -559,7 +559,7 @@ function HariLiburModal({ existing, editData, editIndex, onClose, onSaved }) {
                   : `${formatTanggal(mulai)} — ${formatTanggal(selesai)}`}
               </div>
               <div className="text-xs font-semibold text-green-600 mt-0.5">
-                {jumlahHariLibur(mulai, selesai)} hari libur · karyawan tidak
+                {jumlahHariLibur(mulai, selesai)} hari libur · pegawai tidak
                 dapat absensi pada rentang ini
               </div>
             </div>
@@ -850,7 +850,7 @@ export default function Pengaturan() {
                   </span>
                 </div>
                 <p className="text-xs text-gray-500 font-semibold mt-2">
-                  Karyawan hanya bisa melakukan absensi jika berada dalam radius
+                  Pegawai hanya bisa melakukan absensi jika berada dalam radius
                   ini dari titik kantor.
                 </p>
               </div>

@@ -5,7 +5,7 @@ import { useModal } from "../context/ModalContext";
 
 const TABLE_LABELS = {
   admin_accounts: "Akun Admin/Pimpinan",
-  users: "Karyawan",
+  users: "Pegawai",
   work_schedules: "Jadwal Kerja",
   system_settings: "Parameter Sistem",
   qr_codes: "QR Code",
