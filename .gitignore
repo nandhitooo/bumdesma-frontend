@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 node_modules/
 .env
+
+# Knowledge graph graphify (auto-rebuild oleh post-commit hook)
+graphify-out/
