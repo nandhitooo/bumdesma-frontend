@@ -34,7 +34,11 @@ export default function Piket() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
+  // Draft multi-pilih: pegawai yang dipilih masuk list di modal, baru
+  // dikirim bersamaan saat admin menekan tombol ACC di bagian bawah.
   const [form, setForm] = useState({ userId: "" });
+  const [draftPegawai, setDraftPegawai] = useState([]);
+  const [saving, setSaving] = useState(false);
   const [notifyingId, setNotifyingId] = useState(null);
 
   // Penomoran request: mencegah response lama menimpa data yang lebih baru.
@@ -93,11 +97,32 @@ export default function Piket() {
 
   const openAssign = () => {
     setForm({ userId: "" });
+    setDraftPegawai([]);
     setShowModal(true);
   };
 
-  const handleSave = async () => {
+  const addDraftPegawai = () => {
     if (!form.userId) return;
+    const pegawai = pegawaiList.find((p) => p.id === form.userId);
+    if (!pegawai) return;
+    if (draftPegawai.some((d) => d.id === pegawai.id)) {
+      setForm({ userId: "" });
+      return;
+    }
+    setDraftPegawai([...draftPegawai, pegawai]);
+    setForm({ userId: "" });
+  };
+
+  const removeDraftPegawai = (id) => {
+    setDraftPegawai(draftPegawai.filter((d) => d.id !== id));
+  };
+
+  // Skema ACC: pegawai dipilih satu per satu dan masuk list draft -> admin
+  // menekan tombol ACC di bawah -> modal konfirmasi -> kirim semua userIds
+  // sekaligus. Push notifikasi ke akun pegawai dikirim otomatis oleh backend
+  // (piket.controller.js#assign) untuk setiap pegawai yang baru ditugaskan.
+  const handleAcc = async () => {
+    if (draftPegawai.length === 0 || saving) return;
     const dayOfWeek = new Date(`${tanggal}T00:00:00`).getDay();
     if (dayOfWeek !== 6) {
       await alert("Jadwal piket hanya berlaku untuk hari Sabtu.", {
@@ -105,15 +130,31 @@ export default function Piket() {
       });
       return;
     }
+    const namaList = draftPegawai.map((d) => d.name).join(", ");
+    const confirmed = await confirm(
+      `ACC ${draftPegawai.length} pegawai sebagai piket pada ${tanggal}?\n\n${namaList}\n\nNotifikasi akan dikirim ke akun masing-masing pegawai.`,
+      { title: "Konfirmasi ACC Piket", confirmLabel: "Ya, ACC" },
+    );
+    if (!confirmed) return;
+    setSaving(true);
     try {
-      await api.post("/piket", { tanggal, userIds: [form.userId] });
+      await api.post("/piket", {
+        tanggal,
+        userIds: draftPegawai.map((d) => d.id),
+      });
       setShowModal(false);
       await loadData();
+      await alert(
+        `${draftPegawai.length} jadwal piket tersimpan. Notifikasi sedang dikirim ke akun pegawai.`,
+        { title: "Berhasil" },
+      );
     } catch (err) {
       await alert(getErrorMessage(err, "Gagal menyimpan jadwal piket."), {
         title: "Gagal Menyimpan",
         danger: true,
       });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -365,35 +406,68 @@ export default function Piket() {
             />
           </>
         )}
-      </div>
-
-      {isAdmin && showModal && (
+      </div>      {isAdmin && showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
             <h2 className="text-lg font-extrabold text-gray-800 mb-4">
               Assign Piket ({tanggal})
             </h2>
             <div className="flex flex-col gap-3">
-              <select
-                value={form.userId}
-                onChange={(e) => setForm({ ...form, userId: e.target.value })}
-                className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
-              >
-                <option value="">Pilih Pegawai</option>
-                {pegawaiList.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={form.userId}
+                  onChange={(e) => setForm({ ...form, userId: e.target.value })}
+                  className="flex-1 min-w-0 px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+                >
+                  <option value="">Pilih Pegawai</option>
+                  {pegawaiList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={addDraftPegawai}
+                  disabled={!form.userId}
+                  className="px-4 py-2.5 rounded-xl text-white font-bold text-sm hover:opacity-90 disabled:opacity-40 shrink-0"
+                  style={{ backgroundColor: "#1a7a1a" }}
+                >
+                  <i className="fa-solid fa-plus"></i>
+                </button>
+              </div>
+
+              {/* List draft pegawai yang akan di-ACC */}
+              {draftPegawai.length > 0 && (
+                <div className="flex flex-col gap-1.5 border border-gray-100 rounded-xl p-2 bg-gray-50 max-h-40 overflow-y-auto">
+                  {draftPegawai.map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2 shadow-sm"
+                    >
+                      <span className="text-sm font-bold text-gray-700 truncate">
+                        {d.name}
+                      </span>
+                      <button
+                        onClick={() => removeDraftPegawai(d.id)}
+                        className="text-gray-300 hover:text-red-500 transition-colors shrink-0"
+                      >
+                        <i className="fa-solid fa-circle-xmark"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex gap-3 mt-5">
               <button
-                onClick={handleSave}
-                className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm hover:opacity-90"
+                onClick={handleAcc}
+                disabled={draftPegawai.length === 0 || saving}
+                className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm hover:opacity-90 disabled:opacity-40"
                 style={{ backgroundColor: "#1a7a1a" }}
               >
-                Simpan
+                {saving
+                  ? "Menyimpan..."
+                  : `ACC (${draftPegawai.length})`}
               </button>
               <button
                 onClick={() => setShowModal(false)}
