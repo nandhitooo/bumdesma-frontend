@@ -34,12 +34,21 @@ export default function Piket() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showModal, setShowModal] = useState(false);
-  // Draft multi-pilih: pegawai yang dipilih masuk list di modal, baru
-  // dikirim bersamaan saat admin menekan tombol ACC di bagian bawah.
+  // Draft multi-pilih: pegawai yang dipilih lewat tombol Assign langsung
+  // tampil sebagai baris "menunggu konfirmasi" di list utama (di luar modal).
+  // Baru dikirim ke backend saat admin menekan tombol Konfirmasi di atas
+  // pagination.
   const [form, setForm] = useState({ userId: "" });
   const [draftPegawai, setDraftPegawai] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [notifyingId, setNotifyingId] = useState(null);
+  // Tukar jadwal piket (admin-mediated): pegawai minta ganti secara lisan ke
+  // Admin, Admin catat permintaan -> catat kesediaan pengganti -> keputusan.
+  const [swaps, setSwaps] = useState([]);
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapTarget, setSwapTarget] = useState(null);
+  const [swapForm, setSwapForm] = useState({ replacementUserId: "" });
+  const [swapSaving, setSwapSaving] = useState(false);
+  const [swapBusyId, setSwapBusyId] = useState(null);
 
   // Penomoran request: mencegah response lama menimpa data yang lebih baru.
   const requestSeq = useRef(0);
@@ -48,7 +57,13 @@ export default function Piket() {
     const current = ++requestSeq.current;
     setLoading(true);
     try {
-      const requests = [
+      const pegawaiReq = isAdmin
+        ? api.get("/users", { params: { role: "pegawai", limit: 100 } })
+        : null;
+      const swapReq = isAdmin
+        ? api.get("/piket/swaps", { params: { start: tanggal, end: tanggal } })
+        : null;
+      const [piketRes, pegawaiRes, swapRes] = await Promise.all([
         api.get("/piket", {
           params: {
             start: tanggal,
@@ -58,17 +73,14 @@ export default function Piket() {
             limit: PAGE_SIZE,
           },
         }),
-      ];
-      if (isAdmin) {
-        requests.push(
-          api.get("/users", { params: { role: "pegawai", limit: 100 } }),
-        );
-      }
-      const [piketRes, pegawaiRes] = await Promise.all(requests);
+        pegawaiReq,
+        swapReq,
+      ]);
       if (current !== requestSeq.current) return; // response sudah basi
       setPiket(piketRes.data.data);
       setTotal(piketRes.data.meta?.total ?? piketRes.data.data.length);
       if (pegawaiRes) setPegawaiList(pegawaiRes.data.data);
+      if (swapRes) setSwaps(swapRes.data.data);
     } catch (err) {
       if (current !== requestSeq.current) return; // response sudah basi
       await alert(getErrorMessage(err, "Gagal memuat data piket."), {
@@ -97,10 +109,12 @@ export default function Piket() {
 
   const openAssign = () => {
     setForm({ userId: "" });
-    setDraftPegawai([]);
     setShowModal(true);
   };
 
+  // Menambah satu pegawai ke daftar tunggu. Baris pending dirender di list
+  // utama, bukan di dalam modal, sehingga modal tetap terbuka untuk menambah
+  // beberapa pegawai sekaligus.
   const addDraftPegawai = () => {
     if (!form.userId) return;
     const pegawai = pegawaiList.find((p) => p.id === form.userId);
@@ -117,11 +131,199 @@ export default function Piket() {
     setDraftPegawai(draftPegawai.filter((d) => d.id !== id));
   };
 
-  // Skema ACC: pegawai dipilih satu per satu dan masuk list draft -> admin
-  // menekan tombol ACC di bawah -> modal konfirmasi -> kirim semua userIds
-  // sekaligus. Push notifikasi ke akun pegawai dikirim otomatis oleh backend
-  // (piket.controller.js#assign) untuk setiap pegawai yang baru ditugaskan.
-  const handleAcc = async () => {
+  // --- Tukar jadwal piket (admin-mediated, tanpa pengajuan dari mobile) ---
+  const ACTIVE_SWAP_STATUSES = ["menunggu_pengganti", "menunggu_admin"];
+
+  // Permintaan tukar yang masih berjalan untuk satu baris jadwal.
+  const activeSwapFor = (piketId) =>
+    swaps.find(
+      (s) =>
+        s.piket_schedule_id === piketId &&
+        ACTIVE_SWAP_STATUSES.includes(s.status),
+    );
+
+  const openSwap = (p) => {
+    setSwapTarget(p);
+    setSwapForm({ replacementUserId: "" });
+    setShowSwapModal(true);
+  };
+
+  const handleRequestSwap = async () => {
+    if (!swapTarget || !swapForm.replacementUserId || swapSaving) return;
+    const pengganti = pegawaiList.find(
+      (u) => u.id === swapForm.replacementUserId,
+    );
+    const confirmed = await confirm(
+      `Ajukan tukar piket: ${swapTarget.user?.name} digantikan oleh ${
+        pengganti?.name ?? "pegawai pengganti"
+      } pada ${swapTarget.tanggal}?\n\nKesediaan pegawai pengganti dicatat Admin di tahap berikutnya.`,
+      { title: "Ajukan Tukar Piket", confirmLabel: "Ajukan" },
+    );
+    if (!confirmed) return;
+    setSwapSaving(true);
+    try {
+      await api.post(`/piket/${swapTarget.id}/swap`, {
+        replacementUserId: swapForm.replacementUserId,
+      });
+      setShowSwapModal(false);
+      await loadData();
+      await alert(
+        'Permintaan tukar dicatat. Tekan "B bersedia" pada baris jadwal setelah pegawai pengganti menyetujui.',
+        { title: "Berhasil" },
+      );
+    } catch (err) {
+      await alert(getErrorMessage(err, "Gagal mengajukan tukar piket."), {
+        title: "Gagal Mengajukan",
+        danger: true,
+      });
+    } finally {
+      setSwapSaving(false);
+    }
+  };
+
+  const handleMarkAgreed = async (swapId) => {
+    const confirmed = await confirm(
+      "Catat bahwa pegawai pengganti sudah bersedia menggantikan?",
+      { title: "Kesediaan Pengganti", confirmLabel: "Ya, Bersedia" },
+    );
+    if (!confirmed) return;
+    setSwapBusyId(swapId);
+    try {
+      await api.put(`/piket/swaps/${swapId}/agree`);
+      await loadData();
+    } catch (err) {
+      await alert(getErrorMessage(err, "Gagal mencatat kesediaan."), {
+        title: "Gagal",
+        danger: true,
+      });
+    } finally {
+      setSwapBusyId(null);
+    }
+  };
+
+  const handleSwapDecision = async (swapId, decision) => {
+    const approved = decision === "approved";
+    const confirmed = await confirm(
+      approved
+        ? "Setujui tukar piket ini? Jadwal akan dialihkan ke pegawai pengganti dan notifikasi dikirim otomatis."
+        : "Tolak permintaan tukar piket ini?",
+      {
+        title: approved ? "Setujui Tukar" : "Tolak Tukar",
+        confirmLabel: approved ? "Setujui" : "Tolak",
+        danger: !approved,
+      },
+    );
+    if (!confirmed) return;
+    setSwapBusyId(swapId);
+    try {
+      await api.put(`/piket/swaps/${swapId}/decision`, { decision });
+      await loadData();
+      await alert(
+        approved
+          ? "Tukar piket disetujui. Jadwal dialihkan dan notifikasi dikirim ke kedua pegawai."
+          : "Permintaan tukar piket ditolak.",
+        { title: approved ? "Disetujui" : "Ditolak" },
+      );
+    } catch (err) {
+      await alert(getErrorMessage(err, "Gagal memproses keputusan tukar."), {
+        title: "Gagal",
+        danger: true,
+      });
+    } finally {
+      setSwapBusyId(null);
+    }
+  };
+
+  const handleCancelSwap = async (swapId) => {
+    const confirmed = await confirm("Batalkan permintaan tukar piket ini?", {
+      title: "Batalkan Tukar",
+      confirmLabel: "Batalkan",
+      danger: true,
+    });
+    if (!confirmed) return;
+    setSwapBusyId(swapId);
+    try {
+      await api.delete(`/piket/swaps/${swapId}`);
+      await loadData();
+    } catch (err) {
+      await alert(getErrorMessage(err, "Gagal membatalkan tukar."), {
+        title: "Gagal",
+        danger: true,
+      });
+    } finally {
+      setSwapBusyId(null);
+    }
+  };
+
+  // Aksi tukar pada satu baris jadwal: tombol "Tukar" kalau belum ada
+  // permintaan, atau kontrol status sesuai tahapnya.
+  const renderSwapActions = (p) => {
+    const swap = activeSwapFor(p.id);
+    if (!swap) {
+      return (
+        <button
+          onClick={() => openSwap(p)}
+          className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-amber-500 hover:bg-amber-600 transition-all inline-flex items-center gap-1.5"
+        >
+          <i className="fa-solid fa-right-left"></i> tukar
+        </button>
+      );
+    }
+    const namaPengganti = swap.replacement?.name ?? "pengganti";
+    const busy = swapBusyId === swap.id;
+    return (
+      <div className="flex items-center gap-2 justify-end flex-wrap">
+        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-amber-700 bg-amber-100">
+          <i className="fa-solid fa-right-left"></i>
+          {swap.status === "menunggu_pengganti"
+            ? `Tukar → ${namaPengganti} (menunggu kesediaan)`
+            : `Tukar → ${namaPengganti} (menunggu Admin)`}
+        </span>
+        {swap.status === "menunggu_pengganti" ? (
+          <button
+            onClick={() => handleMarkAgreed(swap.id)}
+            disabled={busy}
+            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-all"
+          >
+            {busy ? "..." : "B bersedia"}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => handleSwapDecision(swap.id, "approved")}
+              disabled={busy}
+              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-all"
+            >
+              Setujui
+            </button>
+            <button
+              onClick={() => handleSwapDecision(swap.id, "rejected")}
+              disabled={busy}
+              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 disabled:opacity-60 transition-all"
+            >
+              Tolak
+            </button>
+          </>
+        )}
+        <button
+          onClick={() => handleCancelSwap(swap.id)}
+          disabled={busy}
+          title="Batalkan permintaan tukar"
+          className="text-gray-400 hover:text-red-500 disabled:opacity-60"
+        >
+          <i className="fa-solid fa-circle-xmark"></i>
+        </button>
+      </div>
+    );
+  };
+
+  // Skema konfirmasi: pegawai dipilih satu per satu lewat tombol Assign dan
+  // tampil sebagai baris pending di list utama -> admin menekan tombol
+  // Konfirmasi di atas pagination -> kirim semua userIds sekaligus.
+  // Push notifikasi ke akun pegawai dikirim otomatis oleh backend
+  // (piket.controller.js#assign) untuk setiap pegawai yang baru ditugaskan,
+  // jadi kolom & tombol notifikasi manual sudah tidak diperlukan.
+  const handleKonfirmasi = async () => {
     if (draftPegawai.length === 0 || saving) return;
     const dayOfWeek = new Date(`${tanggal}T00:00:00`).getDay();
     if (dayOfWeek !== 6) {
@@ -130,10 +332,11 @@ export default function Piket() {
       });
       return;
     }
+    const jumlah = draftPegawai.length;
     const namaList = draftPegawai.map((d) => d.name).join(", ");
     const confirmed = await confirm(
-      `ACC ${draftPegawai.length} pegawai sebagai piket pada ${tanggal}?\n\n${namaList}\n\nNotifikasi akan dikirim ke akun masing-masing pegawai.`,
-      { title: "Konfirmasi ACC Piket", confirmLabel: "Ya, ACC" },
+      `Konfirmasi ${jumlah} pegawai sebagai piket pada ${tanggal}?\n\n${namaList}\n\nNotifikasi akan otomatis dikirim ke akun masing-masing pegawai.`,
+      { title: "Konfirmasi Jadwal Piket", confirmLabel: "Ya, Konfirmasi" },
     );
     if (!confirmed) return;
     setSaving(true);
@@ -142,10 +345,11 @@ export default function Piket() {
         tanggal,
         userIds: draftPegawai.map((d) => d.id),
       });
+      setDraftPegawai([]);
       setShowModal(false);
       await loadData();
       await alert(
-        `${draftPegawai.length} jadwal piket tersimpan. Notifikasi sedang dikirim ke akun pegawai.`,
+        `${jumlah} jadwal piket tersimpan. Notifikasi otomatis dikirim ke akun pegawai.`,
         { title: "Berhasil" },
       );
     } catch (err) {
@@ -176,25 +380,7 @@ export default function Piket() {
     }
   };
 
-  const handleNotify = async (p) => {
-    const confirmed = await confirm(
-      `Kirim notifikasi piket ke ${p.user?.name}?`,
-      { title: "Kirim Notifikasi", confirmLabel: "Kirim" },
-    );
-    if (!confirmed) return;
-    setNotifyingId(p.id);
-    try {
-      await api.post(`/piket/${p.id}/notify`);
-      await loadData();
-    } catch (err) {
-      await alert(getErrorMessage(err, "Gagal mengirim notifikasi."), {
-        title: "Gagal Mengirim",
-        danger: true,
-      });
-    } finally {
-      setNotifyingId(null);
-    }
-  };
+  const isEmpty = piket.length === 0 && draftPegawai.length === 0;
 
   return (
     <div className="flex-1 flex flex-col bg-gray-100 min-h-screen">
@@ -208,6 +394,7 @@ export default function Piket() {
             <SaturdayPicker value={tanggal} onChange={(v) => {
               setTanggal(v);
               setPage(1); // tanggal baru -> mulai dari halaman pertama
+              setDraftPegawai([]); // baris pending terikat tanggal, jangan dibawa
             }} />
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
@@ -252,7 +439,7 @@ export default function Piket() {
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm font-semibold text-gray-500">
             Memuat data...
           </div>
-        ) : piket.length === 0 ? (
+        ) : isEmpty ? (
           <div className="bg-white rounded-2xl shadow-sm p-10 text-center">
             <i
               className={`fa-solid ${
@@ -286,46 +473,56 @@ export default function Piket() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
-                    {p.notification_sent ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-green-700 bg-green-100">
-                        <i className="fa-solid fa-circle-check"></i> Terkirim
-                      </span>
-                    ) : isAdmin ? (
-                      <button
-                        onClick={() => handleNotify(p)}
-                        disabled={notifyingId === p.id}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-all inline-flex items-center gap-1.5"
-                      >
-                        <i className="fa-solid fa-bell"></i>
-                        {notifyingId === p.id
-                          ? "Mengirim..."
-                          : "Kirim Notifikasi"}
-                      </button>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-gray-400 bg-gray-100">
-                        Belum Terkirim
-                      </span>
-                    )}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-green-700 bg-green-100">
+                      <i className="fa-solid fa-circle-check"></i> Terkonfirmasi
+                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isAdmin && renderSwapActions(p)}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleHapus(p.id)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                        >
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
 
+              {/* Baris pending: sudah dipilih lewat Assign, belum dikonfirmasi */}
+              {draftPegawai.map((d) => (
+                <div
+                  key={`draft-${d.id}`}
+                  className="bg-white rounded-2xl shadow-sm p-4 flex flex-col gap-3 border-2 border-dashed border-amber-300"
+                >
+                  <div>
+                    <div className="font-extrabold text-gray-800">
+                      {d.name}
+                    </div>
+                    <div className="text-xs font-semibold text-gray-500 mt-1 flex items-center gap-1.5">
+                      <i className="fa-solid fa-calendar-days text-gray-400"></i>
+                      {tanggal}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 pt-2 border-t border-gray-100">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-700 bg-amber-100">
+                      <i className="fa-solid fa-clock"></i> Menunggu konfirmasi
+                    </span>
                     {isAdmin && (
                       <button
-                        onClick={() => handleHapus(p.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                        onClick={() => removeDraftPegawai(d.id)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 transition-all"
                       >
-                        Hapus
+                        Batalkan
                       </button>
                     )}
                   </div>
                 </div>
               ))}
-
-              <Pagination
-                page={page}
-                limit={PAGE_SIZE}
-                total={total}
-                onPageChange={handlePageChange}
-              />
             </div>
 
             {/* Tampilan tabel - desktop */}
@@ -341,7 +538,7 @@ export default function Piket() {
                         Tanggal
                       </th>
                       <th className="text-left px-5 py-4 text-sm font-extrabold text-gray-700">
-                        Notifikasi
+                        Status
                       </th>
                       {isAdmin && <th className="px-5 py-4"></th>}
                     </tr>
@@ -359,35 +556,49 @@ export default function Piket() {
                           {p.tanggal}
                         </td>
                         <td className="px-5 py-3">
-                          {p.notification_sent ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-green-700 bg-green-100">
-                              <i className="fa-solid fa-circle-check"></i>{" "}
-                              Terkirim
-                            </span>
-                          ) : isAdmin ? (
-                            <button
-                              onClick={() => handleNotify(p)}
-                              disabled={notifyingId === p.id}
-                              className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-all inline-flex items-center gap-1.5"
-                            >
-                              <i className="fa-solid fa-bell"></i>
-                              {notifyingId === p.id
-                                ? "Mengirim..."
-                                : "Kirim Notifikasi"}
-                            </button>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-gray-400 bg-gray-100">
-                              Belum Terkirim
-                            </span>
-                          )}
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-green-700 bg-green-100">
+                            <i className="fa-solid fa-circle-check"></i>{" "}
+                            Terkonfirmasi
+                          </span>
+                        </td>
+                        {isAdmin && (
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2 justify-end flex-wrap">
+                              {renderSwapActions(p)}
+                              <button
+                                onClick={() => handleHapus(p.id)}
+                                className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                              >
+                                hapus
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+
+                    {/* Baris pending: menunggu tombol Konfirmasi */}
+                    {draftPegawai.map((d) => (
+                      <tr key={`draft-${d.id}`} className="bg-amber-50">
+                        <td className="px-5 py-3 font-extrabold text-gray-800">
+                          {d.name}
+                        </td>
+                        <td className="px-5 py-3 font-semibold text-gray-600 text-sm">
+                          {tanggal}
+                        </td>
+                        <td className="px-5 py-3">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-amber-700 bg-amber-100">
+                            <i className="fa-solid fa-clock"></i> Menunggu
+                            konfirmasi
+                          </span>
                         </td>
                         {isAdmin && (
                           <td className="px-5 py-3">
                             <button
-                              onClick={() => handleHapus(p.id)}
-                              className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all"
+                              onClick={() => removeDraftPegawai(d.id)}
+                              className="px-3 py-1 rounded-lg text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 transition-all"
                             >
-                              hapus
+                              batalkan
                             </button>
                           </td>
                         )}
@@ -398,6 +609,27 @@ export default function Piket() {
               </div>
             </div>
 
+            {/* Tombol Konfirmasi - di luar komponen Assign, tepat di atas
+                deretan nomor halaman. Notifikasi dikirim otomatis backend
+                saat tombol ini ditekan. */}
+            {/* Tombol Konfirmasi selalu tampil untuk admin (walau sudah
+                dikonfirmasi) - nonaktif saat tidak ada pegawai pending. */}
+            {isAdmin && (
+              <div className="flex justify-end pt-4">
+                <button
+                  onClick={handleKonfirmasi}
+                  disabled={draftPegawai.length === 0 || saving}
+                  className="px-5 py-2.5 rounded-xl text-white font-bold text-sm flex items-center gap-2 hover:opacity-90 disabled:opacity-60 transition-all"
+                  style={{ backgroundColor: "#1a7a1a" }}
+                >
+                  <i className="fa-solid fa-check-to-slot"></i>
+                  {saving
+                    ? "Menyimpan..."
+                    : `Konfirmasi Piket (${draftPegawai.length})`}
+                </button>
+              </div>
+            )}
+
             <Pagination
               page={page}
               limit={PAGE_SIZE}
@@ -406,12 +638,18 @@ export default function Piket() {
             />
           </>
         )}
-      </div>      {isAdmin && showModal && (
+      </div>
+
+      {isAdmin && showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
-            <h2 className="text-lg font-extrabold text-gray-800 mb-4">
+            <h2 className="text-lg font-extrabold text-gray-800 mb-1">
               Assign Piket ({tanggal})
             </h2>
+            <p className="text-xs font-semibold text-gray-500 mb-4">
+              Pegawai yang ditambahkan muncul di list jadwal piket sebagai
+              baris &ldquo;menunggu konfirmasi&rdquo;.
+            </p>
             <div className="flex flex-col gap-3">
               <div className="flex gap-2">
                 <select
@@ -436,41 +674,73 @@ export default function Piket() {
                 </button>
               </div>
 
-              {/* List draft pegawai yang akan di-ACC */}
               {draftPegawai.length > 0 && (
-                <div className="flex flex-col gap-1.5 border border-gray-100 rounded-xl p-2 bg-gray-50 max-h-40 overflow-y-auto">
-                  {draftPegawai.map((d) => (
-                    <div
-                      key={d.id}
-                      className="flex items-center justify-between gap-2 bg-white rounded-lg px-3 py-2 shadow-sm"
-                    >
-                      <span className="text-sm font-bold text-gray-700 truncate">
-                        {d.name}
-                      </span>
-                      <button
-                        onClick={() => removeDraftPegawai(d.id)}
-                        className="text-gray-300 hover:text-red-500 transition-colors shrink-0"
-                      >
-                        <i className="fa-solid fa-circle-xmark"></i>
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2">
+                  {draftPegawai.length} pegawai menunggu konfirmasi di list.
+                  Tutup modal lalu tekan tombol Konfirmasi Piket.
+                </p>
               )}
             </div>
             <div className="flex gap-3 mt-5">
               <button
-                onClick={handleAcc}
-                disabled={draftPegawai.length === 0 || saving}
+                onClick={() => setShowModal(false)}
+                className="flex-1 py-2.5 rounded-xl text-gray-600 font-bold text-sm bg-gray-100 hover:bg-gray-200"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ajukan tukar jadwal piket */}
+      {isAdmin && showSwapModal && swapTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl">
+            <h2 className="text-lg font-extrabold text-gray-800 mb-1">
+              Ajukan Tukar Piket
+            </h2>
+            <div className="text-xs font-semibold text-gray-500 mb-4 flex flex-col gap-1">
+              <span>
+                <i className="fa-solid fa-user text-gray-400 mr-1.5"></i>
+                {swapTarget.user?.name} · {swapTarget.tanggal}
+              </span>
+              <span>
+                Pegawai pengganti menyetujui secara lisan ke Admin, lalu Admin
+                mencatat kesediaannya sebelum keputusan akhir.
+              </span>
+            </div>
+            <select
+              value={swapForm.replacementUserId}
+              onChange={(e) =>
+                setSwapForm({ replacementUserId: e.target.value })
+              }
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-green-400"
+            >
+              <option value="">Pilih Pegawai Pengganti</option>
+              {pegawaiList
+                .filter(
+                  (u) =>
+                    u.id !== swapTarget.user?.id &&
+                    !piket.some((p) => p.user?.id === u.id),
+                )
+                .map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+            </select>
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={handleRequestSwap}
+                disabled={!swapForm.replacementUserId || swapSaving}
                 className="flex-1 py-2.5 rounded-xl text-white font-bold text-sm hover:opacity-90 disabled:opacity-40"
                 style={{ backgroundColor: "#1a7a1a" }}
               >
-                {saving
-                  ? "Menyimpan..."
-                  : `ACC (${draftPegawai.length})`}
+                {swapSaving ? "Mengajukan..." : "Ajukan Tukar"}
               </button>
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowSwapModal(false)}
                 className="flex-1 py-2.5 rounded-xl text-gray-600 font-bold text-sm bg-gray-100 hover:bg-gray-200"
               >
                 Batal
