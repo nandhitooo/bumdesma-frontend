@@ -51,6 +51,10 @@ export default function Piket() {
   const [swapForm, setSwapForm] = useState({ replacementUserId: "" });
   const [swapSaving, setSwapSaving] = useState(false);
   const [swapBusyId, setSwapBusyId] = useState(null);
+  // Panel "Jadwal Bergilir" (cycle) tidak ditampilkan permanen: halaman utama
+  // Piket fokus ke jadwal tanggal yang dipilih, sedangkan konfigurasi giliran
+  // dibuka lewat tombol supaya tidak menambah beban visual.
+  const [showRotation, setShowRotation] = useState(false);
 
   // Penomoran request: mencegah response lama menimpa data yang lebih baru.
   const requestSeq = useRef(0);
@@ -399,7 +403,9 @@ export default function Piket() {
               setDraftPegawai([]); // baris pending terikat tanggal, jangan dibawa
             }} />
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* sm:flex-wrap: sejak ada tombol "Atur Jadwal Bergilir" di samping
+              pencarian + Assign, baris ini bisa lebih lebar dari layar sempit. */}
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 w-full sm:w-auto">
             {/* Pencarian nama pegawai (server-side, debounce 400ms) */}
             <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-2.5 shadow-sm w-full sm:w-64">
               <i className="fa-solid fa-magnifying-glass text-gray-500 shrink-0"></i>
@@ -425,6 +431,26 @@ export default function Piket() {
               )}
             </div>
 
+            {(isAdmin || isPimpinan) && (
+              <button
+                onClick={() => setShowRotation((v) => !v)}
+                aria-expanded={showRotation}
+                aria-controls="piket-rotation-panel"
+                className={`px-5 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all w-full sm:w-fit ${
+                  showRotation
+                    ? "text-green-800 bg-green-50 border-green-300"
+                    : "text-gray-700 bg-white border-gray-200 hover:border-green-300"
+                }`}
+              >
+                <i
+                  className={`fa-solid ${
+                    showRotation ? "fa-chevron-up" : "fa-arrows-rotate"
+                  }`}
+                ></i>
+                {showRotation ? "Tutup Jadwal Bergilir" : "Atur Jadwal Bergilir"}
+              </button>
+            )}
+
             {isAdmin && (
               <button
                 onClick={openAssign}
@@ -438,8 +464,15 @@ export default function Piket() {
         </div>
 
         {/* Giliran (cycle) piket: daftar pegawai berurut yang bergiliran
-            otomatis tiap Sabtu. Admin bisa mengubah; Pimpinan hanya melihat. */}
-        {(isAdmin || isPimpinan) && <PiketRotationCard canEdit={isAdmin} />}
+            otomatis tiap Sabtu. Disembunyikan secara default dan dibuka lewat
+            tombol "Atur Jadwal Bergilir". Admin bisa mengubah; Pimpinan hanya
+            melihat. Dihapus dari DOM saat tertutup supaya tidak memuat data
+            giliran yang belum dibutuhkan. */}
+        {showRotation && (isAdmin || isPimpinan) && (
+          <div id="piket-rotation-panel">
+            <PiketRotationCard canEdit={isAdmin} />
+          </div>
+        )}
 
         {loading ? (
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm font-semibold text-gray-500">
