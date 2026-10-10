@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Topbar from "../components/Topbar";
 import SaturdayPicker from "../components/SaturdayPicker";
 import Pagination from "../components/Pagination";
+import PiketRotationCard from "../components/PiketRotationCard";
 import api, { getErrorMessage } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { useModal } from "../context/ModalContext";
@@ -21,6 +22,7 @@ export default function Piket() {
   const { user } = useAuth();
   const { alert, confirm } = useModal();
   const isAdmin = user?.role === "admin";
+  const isPimpinan = user?.role === "pimpinan";
 
   const [tanggal, setTanggal] = useState(defaultSaturday());
   const [piket, setPiket] = useState([]);
@@ -434,6 +436,10 @@ export default function Piket() {
             )}
           </div>
         </div>
+
+        {/* Giliran (cycle) piket: daftar pegawai berurut yang bergiliran
+            otomatis tiap Sabtu. Admin bisa mengubah; Pimpinan hanya melihat. */}
+        {(isAdmin || isPimpinan) && <PiketRotationCard canEdit={isAdmin} />}
 
         {loading ? (
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center text-sm font-semibold text-gray-500">

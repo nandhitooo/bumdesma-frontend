@@ -12,6 +12,7 @@ const TABLE_LABELS = {
   attendances: "Absensi",
   leaves: "Izin/Cuti",
   piket_schedules: "Jadwal Piket",
+  piket_swaps: "Tukar Jadwal Piket",
   notifications: "Notifikasi",
   push_tokens: "Push Token",
   activity_logs: "Log Aktivitas",
@@ -95,10 +96,22 @@ export default function BackupCard() {
       const res = await api.post("/backup/restore", fd, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      await alert(
-        res.data.message || "Restore data berhasil.",
-        { title: "Restore Berhasil" },
-      );
+      // Tabel yang tidak ada di file backup tidak ikut di-restore. Tampilkan
+      // supaya file lama (mis. tanpa `piket_swaps`) tidak lewat tanpa disadari.
+      const missingTables = res.data?.data?.missing_tables || [];
+      if (missingTables.length > 0) {
+        await alert(
+          `Restore berhasil, namun file backup tidak memuat ${missingTables.length} tabel: ` +
+            `${missingTables.join(", ")}. Tabel tersebut tidak ikut dipulihkan - ` +
+            "unduh ulang backup dari versi terbaru agar seluruh data tercakup.",
+          { title: "Restore Sebagian", danger: true },
+        );
+      } else {
+        await alert(
+          res.data.message || "Restore data berhasil.",
+          { title: "Restore Berhasil" },
+        );
+      }
       clearRestoreForm();
       await loadStats();
     } catch (err) {
